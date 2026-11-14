@@ -1,0 +1,137 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3982af95667174c498eca865e3925a7f, type: 3}
+  m_Name: CarSetup_Default
+  m_EditorClassIdentifier: Assembly-CSharp::OWR.Vehicle.CarSetup
+  mass: 798
+  centerOfMass: {x: 0, y: 0.26, z: -0.2}
+  frontRadius: 0.34
+  rearRadius: 0.34
+  wheelInertia: 1.2
+  restLength: 0.12
+  springFront: 120000
+  springRear: 140000
+  damperBump: 5500
+  damperRebound: 7500
+  antiRollFront: 40000
+  antiRollRear: 30000
+  frictionCoefficient: 1.7
+  peakSlipRatio: 0.1
+  peakSlipAngle: 7.5
+  curveShape: 1.45
+  loadSensitivity: 0.12
+  referenceLoad: 3000
+  lowSpeedSlipFloor: 3
+  rollingResistance: 0.012
+  maxSteerLowSpeed: 20
+  maxSteerHighSpeed: 4.5
+  steerSpeedReference: 70
+  maxBrakeTorque: 13000
+  brakeBias: 0.58
+  idleRpm: 4000
+  launchRpm: 8000
+  revLimit: 12500
+  torqueCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 300
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 4000
+      value: 400
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 7000
+      value: 530
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 10500
+      value: 650
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 12000
+      value: 610
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 12500
+      value: 560
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  engineBrakeTorque: 70
+  engineInertiaRevRate: 25000
+  drivetrainEfficiency: 0.92
+  gearRatios:
+  - 5
+  - 3.8
+  - 3.07
+  - 2.57
+  - 2.2
+  - 1.93
+  - 1.7
+  - 1.52
+  reverseRatio: 4.5
+  finalDrive: 3
+  upshiftTime: 0.03
+  downshiftTime: 0.06
+  autoShift: 0
+  tractionControl: 1
+  tractionControlSlip: 0.14
+  stabilityAssist: 1
+  steeringAssist: 1
+  steeringAssistGrip: 1.35
+  absAssist: 0
+  stabilityStrength: 2600
+  autoUpshiftRpm: 11800
+  autoDownshiftRpm: 7000
+  diffLockTorque: 110
+  diffMaxTransfer: 1200
+  ersPowerKw: 120
+  batteryCapacityMJ: 4
+  harvestPowerKw: 120
+  liftCoefficientArea: 4.5
+  dragCoefficientArea: 1.1
+  aeroBalanceFront: 0.44
+  airDensity: 1.225

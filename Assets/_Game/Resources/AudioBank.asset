@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 66d8ef49bf8811748bf9381ad9e19b7a, type: 3}
+  m_Name: AudioBank
+  m_EditorClassIdentifier: Assembly-CSharp::OWR.AudioFX.AudioBank
+  engineRpm:
+  - 3500
+  - 5000
+  - 6500
+  - 8000
+  - 9500
+  - 11000
+  - 12500
+  engineOn:
+  - {fileID: 8300000, guid: 397d4c6726430314fbe4172f5d2db1fa, type: 3}
+  - {fileID: 8300000, guid: 73324812b649c8d43ab8a16501ea9e2a, type: 3}
+  - {fileID: 8300000, guid: 1cd81ceee70a89347913334265999908, type: 3}
+  - {fileID: 8300000, guid: 3d41716886a332444994417a1448444a, type: 3}
+  - {fileID: 8300000, guid: a848762bdfc4c104d8c179beb1b7fc6d, type: 3}
+  - {fileID: 8300000, guid: 602e112260522a74990da669ccb870bc, type: 3}
+  - {fileID: 8300000, guid: f93421737b7e06143a275b96c5800849, type: 3}
+  engineOff:
+  - {fileID: 8300000, guid: e5ac7022d1077bd4aaaa25e4a2bb6a77, type: 3}
+  - {fileID: 8300000, guid: 3bda948eaa7c460498797b9776882bbc, type: 3}
+  - {fileID: 8300000, guid: 6aeea7198d250ff408880ad3ccad781b, type: 3}
+  - {fileID: 8300000, guid: 774f4a45bcd296345b986e67d3bd054c, type: 3}
+  - {fileID: 8300000, guid: 14d7b81fc0b5f2e4f8ce3237c8a3ae5d, type: 3}
+  - {fileID: 8300000, guid: 1f26ab19db1ae9747a2494ebfbdfb861, type: 3}
+  - {fileID: 8300000, guid: 4bda276bbf27beb4e9c5b966ebb3d41d, type: 3}
+  pops:
+  - {fileID: 8300000, guid: f35df462edc356a49945f3b1f7bee795, type: 3}
+  - {fileID: 8300000, guid: 39f93bef5e1e73e40a7c963d75fbc9e0, type: 3}
+  - {fileID: 8300000, guid: 2444c2bf233ded0489522375b5a4d7a6, type: 3}
+  rain: {fileID: 8300000, guid: 0d964c8f3f4a39d45ba9dc3797b83e60, type: 3}
+  wind: {fileID: 8300000, guid: 86eadfb23adc29a4183e1f8830bc070d, type: 3}
+  tyres: {fileID: 8300000, guid: fb230e67c3174ee4c8c46653cb0339ff, type: 3}
+  kerb: {fileID: 8300000, guid: 9b4aed5beb50c284d9a5f1fb6d1a9484, type: 3}
+  crowd: {fileID: 8300000, guid: 4ecb59687b7d97842844bae28199475c, type: 3}
