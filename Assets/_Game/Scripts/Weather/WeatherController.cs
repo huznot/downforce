@@ -14,7 +14,7 @@ namespace OWR.Weather
         [Range(0f, 1f)] public float rain = 0.75f;
         [Range(0f, 1f)] public float wetness = 0.85f;
         [Tooltip("Tyre grip multiplier on a fully wet track.")]
-        public float wetGrip = 0.90f;
+        public float wetGrip = 0.95f;
 
         public ParticleSystem rainSystem;
         public ParticleSystem[] spraySystems;   // one per wheel, children of the wheel steer pivots

@@ -404,8 +404,9 @@ namespace OWR.UI
                 case "practice": ShowBanner("FREE PRACTICE  ·  GO"); break;
                 case "pb": ShowBanner("PERSONAL BEST"); break;
                 case "practice_restart": ShowNotice("RESTART LAP", "PRACTICE"); break;
-                case "penalty": ShowNotice($"{rm.LastPenaltySeconds:0} SEC PENALTY  ·  {rm.LastPenaltyCode}", "CONTACT"); break;
-                case "penalty_you": ShowNotice($"{rm.LastPenaltySeconds:0} SEC PENALTY  ·  YOU", "CONTACT"); break;
+                case "penalty": ShowNotice($"{rm.LastPenaltySeconds:0} SEC PENALTY  ·  {rm.LastPenaltyCode}", rm.LastPenaltyReason); break;
+                case "penalty_you": ShowNotice($"{rm.LastPenaltySeconds:0} SEC PENALTY  ·  YOU", rm.LastPenaltyReason); break;
+                case "tracklimits": ShowNotice(rm.Player.trackLimits >= 3 ? "TRACK LIMITS  ·  FINAL WARNING" : $"TRACK LIMITS  ·  WARNING {rm.Player.trackLimits}", "BLACK AND WHITE FLAG"); break;
                 case "begin":
                     titleSubText.text = rm.Practice ? "FREE  PRACTICE" : $"WET  RACE   ·   {rm.totalLaps}  LAPS";
                     root.GetComponent<Canvas>().enabled = true;

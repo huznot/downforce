@@ -20,8 +20,8 @@ namespace OWR.EditorTools
             PlayerSettings.productName = "Downforce";
             PlayerSettings.companyName = "OWR";
             PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, PackageId);
-            PlayerSettings.bundleVersion = "1.0.0";
-            if (PlayerSettings.Android.bundleVersionCode < 1) PlayerSettings.Android.bundleVersionCode = 1;
+            PlayerSettings.bundleVersion = "1.0.1";
+            if (PlayerSettings.Android.bundleVersionCode < 2) PlayerSettings.Android.bundleVersionCode = 2;
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
             PlayerSettings.allowedAutorotateToLandscapeLeft = true;
             PlayerSettings.allowedAutorotateToLandscapeRight = true;

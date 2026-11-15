@@ -463,12 +463,15 @@ namespace OWR.EditorTools
             flagMat.doubleSidedGI = true;
             EditorUtility.SetDirty(flagMat);
 
-            float d = 5f, lat = -(width / 2f + 1.3f);
-            Vector3 right = Vector3.Cross(Vector3.up, path.TangentAt(d)).normalized;
+            // ~22 m before the line on the left, angled toward the oncoming cars so the driver sees him on the run in
+            float d = path.Length - 22f, lat = -(width / 2f + 1.7f);
+            Vector3 tan = path.TangentAt(d);
+            Vector3 right = Vector3.Cross(Vector3.up, tan).normalized;
             var g = new GameObject("FlagStand");
             g.transform.SetParent(parent, false);
             g.transform.position = path.PointAt(d, lat);
-            g.transform.rotation = Quaternion.LookRotation(right, Vector3.up);   // marshal faces across the track
+            g.transform.rotation = Quaternion.LookRotation(Vector3.Slerp(right, -tan, 0.35f).normalized, Vector3.up);
+            g.transform.localScale = Vector3.one * 1.35f;
             const float deck = 2.3f;
             Cube(g.transform, steel, new Vector3(0f, deck * 0.5f, -0.5f), new Vector3(0.25f, deck, 0.25f));
             Cube(g.transform, steel, new Vector3(0f, deck, 0f), new Vector3(1.6f, 0.12f, 1.6f));

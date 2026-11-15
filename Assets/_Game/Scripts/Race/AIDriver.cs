@@ -36,9 +36,9 @@ namespace OWR.Race
             lane = targetLane = laneOffset;
             car.setup.autoShift = true;   // AI drivers shift on the ideal points
             // AI-driven cars (rivals and the showcase auto-drive) get a touch more grip and a firmer stability aid
-            car.setup.frictionCoefficient *= drivesPlayer ? 1.12f : 1.08f;
+            car.setup.frictionCoefficient *= drivesPlayer ? 1.06f : 1.03f;
             car.setup.stabilityAssist = true;
-            car.setup.stabilityStrength *= 1.6f;
+            car.setup.stabilityStrength *= 1.3f;
             car.setup.tractionControl = true;
             car.setup.tractionControlSlip = 0.09f;
             if (drivesPlayer) { steerRate = 1.8f; return; }   // keep the player's own audio

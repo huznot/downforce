@@ -27,13 +27,13 @@ namespace OWR.Vehicle
         public float antiRollRear = 30000f;
 
         [Header("Tyres")]
-        public float frictionCoefficient = 1.7f;
+        public float frictionCoefficient = 1.8f;
         [Tooltip("Slip ratio at which longitudinal grip peaks.")]
         public float peakSlipRatio = 0.10f;
         [Tooltip("Slip angle (degrees) at which lateral grip peaks.")]
-        public float peakSlipAngle = 8.5f;
+        public float peakSlipAngle = 6f;
         [Tooltip("Pacejka-style shape. Higher = more grip loss once past the peak.")]
-        [Range(1.1f, 1.9f)] public float curveShape = 1.38f;
+        [Range(1.1f, 1.9f)] public float curveShape = 1.3f;
         [Tooltip("Grip falls as load rises: mu *= 1 - k * (Fz/refLoad - 1).")]
         public float loadSensitivity = 0.12f;
         public float referenceLoad = 3000f;
@@ -74,7 +74,7 @@ namespace OWR.Vehicle
         public bool autoShift = false;
         [Tooltip("Driver aid: trims rear torque when the rears spin past the grip peak. F3 toggles in play.")]
         public bool tractionControl = true;
-        public float tractionControlSlip = 0.12f;
+        public float tractionControlSlip = 0.1f;
         [Tooltip("Driver aid: resists yaw that exceeds what the steering asks for (F4 toggles).")]
         public bool stabilityAssist = true;
         [Tooltip("Driver aid: never asks the front tyres for more lateral grip than they have (smooth, no-slide turn-in).")]
@@ -82,7 +82,7 @@ namespace OWR.Vehicle
         public float steeringAssistGrip = 1.35f;
         [Tooltip("Driver aid (Easy): releases brake pressure before the wheels lock.")]
         public bool absAssist = false;
-        public float stabilityStrength = 2600f;
+        public float stabilityStrength = 9000f;
         public float autoUpshiftRpm = 11800f;
         public float autoDownshiftRpm = 7000f;
 
@@ -98,7 +98,7 @@ namespace OWR.Vehicle
         public float harvestPowerKw = 120f;
 
         [Header("Aero")]
-        public float liftCoefficientArea = 4.5f;   // ClA, m^2
+        public float liftCoefficientArea = 5f;   // ClA, m^2
         public float dragCoefficientArea = 1.1f;   // CdA, m^2
         [Range(0.3f, 0.6f)] public float aeroBalanceFront = 0.44f;
         public float airDensity = 1.225f;

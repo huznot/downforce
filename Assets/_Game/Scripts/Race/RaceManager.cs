@@ -39,6 +39,10 @@ namespace OWR.Race
             public float FinalTime => finishTime + penalty;
             [System.NonSerialized] public float mistakeAt = -1f;
             [System.NonSerialized] public int mistakeLap = -1;
+            [System.NonSerialized] public float baseSkill = 1f;
+            [System.NonSerialized] public int trackLimits;
+            [System.NonSerialized] public float offTime;
+            [System.NonSerialized] public bool offCounted;
         }
 
         public static RaceManager Instance { get; private set; }
@@ -217,6 +221,8 @@ namespace OWR.Race
             UpdateOrder();
             PlayerEvents();
             ShowcasePacing();
+            RivalPacing();
+            TrackLimits();
         }
 
         void UpdateOrder()
@@ -245,7 +251,7 @@ namespace OWR.Race
             if (e.isPlayer && GameOptions.AutoDrive) return; // keep the showcase run going to the flag
             var c = e.car;
             float speed = c.Body.linearVelocity.magnitude;
-            bool easy = e.isPlayer && GameOptions.Difficulty == Difficulty.Easy;
+            bool easy = e.isPlayer;   // same crash tolerance for the player on every difficulty
             bool bigHit = Time.time - c.lastImpactTime < 0.1f && c.lastImpact > (easy ? 32f : 22f);
             float yaw = Mathf.Abs(Vector3.Dot(c.Body.angularVelocity, c.transform.up));
             bool backwards = Vector3.Dot(c.transform.forward, path.TangentAt(e.d)) < -0.35f;
@@ -349,19 +355,13 @@ namespace OWR.Race
             }
             foreach (var e in entries)
             {
-                if (e.ai && !e.ai.drivesPlayer) e.ai.skill *= GameOptions.RivalPace;
+                if (e.ai && !e.ai.drivesPlayer) { e.ai.skill *= GameOptions.RivalPace; e.baseSkill = e.ai.skill; }
                 if (!e.isPlayer) continue;
                 var s = e.car.setup;
                 s.autoShift = GameOptions.AutoGears || GameOptions.AutoDrive || OWR.Input.TouchControls.Active;
-                if (GameOptions.Difficulty == Difficulty.Easy)
-                {
-                    s.frictionCoefficient *= 1.15f;
-                    s.stabilityAssist = true;
-                    s.stabilityStrength *= 2.5f;
-                    s.tractionControl = true;
-                    s.tractionControlSlip = 0.08f;
-                    s.absAssist = true;
-                }
+                // the player's car and aids are the same on every difficulty; difficulty only changes the opponents
+                s.stabilityAssist = true; s.tractionControl = true;
+                s.tractionControlSlip = 0.09f; s.absAssist = true;
             }
             UpdateOrder();
             lastPlayerPos = Player != null ? Player.pos : 0;
@@ -410,6 +410,73 @@ namespace OWR.Race
             Player.ai.skill = Mathf.Clamp(0.97f + k, 0.9f, 1.04f);
         }
 
+        // ================================================================= rival race craft
+        /// <summary>
+        /// Keeps the race alive around the player like real racecraft: rivals behind you push harder the more you
+        /// pull away, rivals far up the road manage their pace so you can reel them in, anyone within a second of
+        /// the car ahead attacks, and everyone pushes over the last two laps. The size of each effect scales with
+        /// difficulty. Pace never goes beyond what the car can do through the corners.
+        /// </summary>
+        void RivalPacing()
+        {
+            if (GameOptions.AutoDrive || Practice || Player == null || State != RaceState.Racing) return;
+            float push, ease;
+            switch (GameOptions.Difficulty)
+            {
+                case Difficulty.Easy: push = 0.06f; ease = 0.07f; break;
+                case Difficulty.Normal: push = 0.08f; ease = 0.04f; break;
+                default: push = 0.10f; ease = 0.02f; break;
+            }
+            float avg = Mathf.Max(25f, Mathf.Abs(Player.car.telemetry.speedMs));
+            bool lastLaps = Player.lap >= totalLaps - 1;
+            for (int i = 0; i < Order.Count; i++)
+            {
+                var e = Order[i];
+                if (e.isPlayer || e.ai == null || e.dnf || e.finished) continue;
+                float gap = (Player.progress - e.progress) / avg;   // seconds; > 0 = rival behind the player
+                float k = 0f;
+                if (gap > 0.4f) k += Mathf.Clamp01((gap - 0.4f) / 6f) * push;          // chase the player down
+                else if (gap < -2f) k -= Mathf.Clamp01((-gap - 2f) / 10f) * ease;      // don't vanish up the road
+                if (i > 0)
+                {
+                    float toAhead = (Order[i - 1].progress - e.progress) / avg;
+                    if (toAhead < 1.2f) k += 0.02f;                                     // attack mode (ERS, late braking)
+                }
+                if (lastLaps) k += 0.015f;
+                float target = Mathf.Clamp(e.baseSkill * (1f + k), 0.8f, 1.1f);
+                e.ai.skill = Mathf.MoveTowards(e.ai.skill, target, Time.deltaTime * 0.02f);
+            }
+        }
+
+        // ================================================================= track limits
+        /// <summary>
+        /// Track limits like the real thing: going fully past the white line (all four wheels off, over 50 km/h) counts
+        /// as a violation. Three warnings, then a 5 s time penalty on the 4th and every 3rd after that.
+        /// </summary>
+        void TrackLimits()
+        {
+            if (Practice || State != RaceState.Racing) return;
+            float limit = path.roadWidth * 0.5f + 1.3f;   // car centre beyond the white line by more than half the car width
+            foreach (var e in entries)
+            {
+                if (e.dnf || e.finished) continue;
+                path.Project(e.car.transform.position, ref e.hint, out float lat);
+                bool off = Mathf.Abs(lat) > limit && Mathf.Abs(e.car.telemetry.speedMs) > 14f;
+                if (off) e.offTime += Time.deltaTime; else { e.offTime = 0f; e.offCounted = false; }
+                if (e.offCounted || e.offTime < 0.35f) continue;
+                e.offCounted = true;
+                e.trackLimits++;
+                if (e.trackLimits >= 4 && (e.trackLimits - 4) % 3 == 0)
+                {
+                    e.penalty += 5f; e.lastPenaltyAt = Time.time;
+                    LastPenaltyCode = e.code; LastPenaltySeconds = 5f; LastPenaltyReason = "TRACK LIMITS";
+                    Raise(e.isPlayer ? "penalty_you" : "penalty");
+                }
+                else if (e.isPlayer) Raise("tracklimits");
+            }
+        }
+        public string LastPenaltyReason { get; private set; } = "CONTACT";
+
         // ================================================================= penalties
         /// <summary>
         /// Contact between two race cars: the car that runs into the back of another (closing fast) or swipes
@@ -445,6 +512,7 @@ namespace OWR.Race
             e.penalty += add;
             LastPenaltyCode = e.code;
             LastPenaltySeconds = add;
+            LastPenaltyReason = "CONTACT";
             Raise(e.isPlayer ? "penalty_you" : "penalty");
         }
         public float LastPenaltySeconds { get; private set; }

@@ -12,7 +12,7 @@ namespace OWR.Race
         public float roadWidth = 14f;
 
         [Header("AI speed profile")]
-        public float gripMu = 1.2f;         // usable tyre friction in the wet (conservative)
+        public float gripMu = 1.35f;        // usable tyre friction in the wet (conservative)
         public float brakeDecel = 22f;      // m/s^2 the AI plans to brake with
         public float maxSpeed = 88f;
 
@@ -38,7 +38,7 @@ namespace OWR.Race
 
             // curvature-limited speed with downforce: v^2 = mu g R / (1 - mu k R), k = 0.5 rho ClA / m
             speed = new float[n];
-            const float k = 0.5f * 1.225f * 4.5f / 798f;
+            const float k = 0.5f * 1.225f * 5f / 798f;
             for (int i = 0; i < n; i++)
             {
                 Vector3 a = points[(i - 4 + n) % n], b = points[i], c = points[(i + 4) % n];
