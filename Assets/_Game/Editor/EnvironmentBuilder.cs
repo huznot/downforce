@@ -589,10 +589,11 @@ namespace OWR.EditorTools
                     Object.DestroyImmediate(panel.GetComponent<Collider>());
                     panel.name = "FasciaPanel";
                     panel.transform.SetParent(root, false);
-                    panel.transform.localPosition = new Vector3(2.3f, topY + 4.0f, z);
+                    float fy = topY + 4.0f;
+                    panel.transform.localPosition = new Vector3(2.75f, fy, z);   // in front of the roof slab's edge (x 2.4), so the roof never cuts through it
                     panel.transform.localScale = new Vector3(0.1f, w / 8f + 0.3f, w + 0.4f);
                     panel.GetComponent<Renderer>().sharedMaterial = BrandKit.FrameMat();
-                    kit.Quad(root.TransformPoint(new Vector3(2.36f, topY + 4.0f, z)), root.TransformDirection(Vector3.forward), Vector3.up, w, w / 8f, i * 3 + 1 + name.Length, false);
+                    kit.Quad(new Vector3(2.81f, fy, z), Vector3.forward, Vector3.up, w, w / 8f, i * 3 + 1 + name.Length, false);   // local space: the Fascia mesh is a child of the stand
                 }
                 kit.Build("Fascia", root, BrandKit.BoardMat());
             }
@@ -859,11 +860,27 @@ namespace OWR.EditorTools
                 g.GetComponent<MeshRenderer>().sharedMaterials = new[] { rubber, belt };
                 rubberParts.Clear(); beltParts.Clear();
             };
+            // collision: a solid slab from the front tyre face back to the wall, so cars hit the tyres instead of clipping through
+            var cv = new List<Vector3>(); var ct = new List<int>();
+            int prevI = -9, prevOuter = 0;
             for (int i = 0; i < n; i += 1)
             {
                 if (Mathf.Abs(c[i]) < 1f / 140f) continue;
                 int outer = c[i] > 0f ? -1 : 1; // turning right -> outside is left
                 Vector3 r = Right(pts, i);
+                {
+                    float wo = wallAt(i, outer);
+                    Vector3 front = pts[i] + r * outer * (wo - 1.7f) + Vector3.up * groundY, back = pts[i] + r * outer * wo + Vector3.up * groundY;
+                    int b = cv.Count;
+                    cv.Add(front + Vector3.up * -0.3f); cv.Add(front + Vector3.up * 0.72f); cv.Add(back + Vector3.up * 0.72f);
+                    if (prevI == i - 1 && prevOuter == outer)
+                        for (int q = 0; q < 2; q++)   // front face and top, both windings
+                        {
+                            int a0 = b - 3 + q, a1 = b - 3 + q + 1, b0 = b + q, b1 = b + q + 1;
+                            ct.AddRange(new[] { a0, b0, b1, a0, b1, a1, a0, b1, b0, a0, a1, b1 });
+                        }
+                    prevI = i; prevOuter = outer;
+                }
                 for (int row = 0; row < 2; row++)
                 {
                     var mtx = Matrix4x4.TRS(pts[i] + r * outer * (wallAt(i, outer) - 0.75f - row * 0.62f) + Vector3.up * groundY, Quaternion.LookRotation(-r * outer, Vector3.up), Vector3.one);
@@ -873,6 +890,67 @@ namespace OWR.EditorTools
                 if (rubberParts.Count >= 400) flush();
             }
             flush();
+            if (ct.Count > 0)
+            {
+                var cm = new Mesh { name = "TyreWall_Collision", indexFormat = IndexFormat.UInt32 };
+                cm.SetVertices(cv); cm.SetTriangles(ct, 0); cm.RecalculateBounds();
+                var cg = new GameObject("TyreWall_Collision"); cg.transform.SetParent(root, false); cg.isStatic = true;
+                cg.AddComponent<MeshCollider>().sharedMesh = cm;
+            }
+        }
+
+        const string MarshalModel = Root + "/External/Marshal/Worker.glb";
+
+        /// <summary>
+        /// A rigged low-poly person (Quaternius "Worker", CC0) recoloured as a track marshal: orange overalls.
+        /// Returns the figure (feet at the parent's origin, facing +z) and its idle clip.
+        /// </summary>
+        public static GameObject MarshalFigure(Transform parent, Material orange, out AnimationClip idle)
+        {
+            idle = null;
+            foreach (var a in AssetDatabase.LoadAllAssetsAtPath(MarshalModel))
+                if (a is AnimationClip c && c.name.EndsWith("|Idle_Neutral")) idle = c;
+            var src = AssetDatabase.LoadAssetAtPath<GameObject>(MarshalModel);
+            var g = Object.Instantiate(src, parent, false);
+            g.name = "Marshal";
+            var an = g.GetComponent<Animator>(); if (an) Object.DestroyImmediate(an);
+            foreach (var r in g.GetComponentsInChildren<Renderer>())
+            {
+                var ms = r.sharedMaterials;
+                for (int i = 0; i < ms.Length; i++)
+                    if (ms[i] && (ms[i].name.StartsWith("Worker_Vest") || ms[i].name.StartsWith("Worker_Yellow") || ms[i].name == "LightBrown" || ms[i].name == "Brown")) ms[i] = orange;
+                r.sharedMaterials = ms;
+                r.shadowCastingMode = ShadowCastingMode.On;
+            }
+            if (idle) idle.SampleAnimation(g, 0.3f);
+            return g;
+        }
+
+        /// <summary>The marshal figure frozen in a pose and baked to one static mesh (cheap enough for every marshal post).</summary>
+        public static Mesh BakedMarshal(Material orange, out Material[] mats, string clipSuffix, float time, string tag = null)
+        {
+            var tmp = new GameObject("tmp_marshal");
+            var g = MarshalFigure(tmp.transform, orange, out var idle);
+            foreach (var a in AssetDatabase.LoadAllAssetsAtPath(MarshalModel))
+                if (a is AnimationClip c && c.name.EndsWith(clipSuffix)) { c.SampleAnimation(g, time); break; }
+            var parts = new List<CombineInstance>(); var ml = new List<Material>();
+            foreach (var smr in g.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                var m = new Mesh(); smr.BakeMesh(m, true);
+                var mtx = g.transform.worldToLocalMatrix * Matrix4x4.TRS(smr.transform.position, smr.transform.rotation, Vector3.one);
+                for (int s = 0; s < m.subMeshCount; s++)
+                {
+                    parts.Add(new CombineInstance { mesh = m, subMeshIndex = s, transform = mtx });
+                    ml.Add(smr.sharedMaterials[Mathf.Min(s, smr.sharedMaterials.Length - 1)]);
+                }
+            }
+            tag = tag ?? clipSuffix.TrimStart('|');
+            var mesh = new Mesh { name = "Marshal_" + tag };
+            mesh.CombineMeshes(parts.ToArray(), false, true);
+            Object.DestroyImmediate(tmp);
+            mats = ml.ToArray();
+            string mp = Root + "/Meshes/Marshal_" + tag + ".asset"; AssetDatabase.DeleteAsset(mp); AssetDatabase.CreateAsset(mesh, mp);
+            return mesh;
         }
 
         /// <summary>Marshal posts: small hut, two marshals in orange, yellow flag on a pole.</summary>
@@ -887,17 +965,13 @@ namespace OWR.EditorTools
             var k = new MeshKit(3);
             k.Box(1, new Vector3(0f, 1.2f, 0f), new Vector3(2.2f, 2.4f, 2.0f), Quaternion.identity);
             k.Box(1, new Vector3(0f, 2.5f, 0.2f), new Vector3(2.6f, 0.15f, 2.6f), Quaternion.identity);
-            for (int m = 0; m < 2; m++)
-            {
-                float z = -0.6f + m * 1.2f;
-                k.Box(0, new Vector3(1.6f, 0.45f, z), new Vector3(0.32f, 0.9f, 0.25f), Quaternion.identity);
-                k.Box(0, new Vector3(1.6f, 1.2f, z), new Vector3(0.38f, 0.65f, 0.3f), Quaternion.identity);
-                k.Box(0, new Vector3(1.6f, 1.66f, z), new Vector3(0.2f, 0.24f, 0.2f), Quaternion.identity);
-            }
             k.Tube(1, new List<Vector3> { new Vector3(1.9f, 0f, 1.1f), new Vector3(1.9f, 3.2f, 1.1f) }, 0.03f, 6);
             k.Box(2, new Vector3(1.9f, 2.85f, 1.55f), new Vector3(0.01f, 0.6f, 0.85f), Quaternion.Euler(0f, 0f, 4f));
             var mesh = k.Build("MarshalPost");
             string mp = Root + "/Meshes/MarshalPost.asset"; AssetDatabase.DeleteAsset(mp); AssetDatabase.CreateAsset(mesh, mp);
+            // two real marshal figures per post (baked poses of the rigged model, static so hundreds cost little)
+            var poseA = BakedMarshal(orange, out var matsA, "|Idle_Neutral", 0.4f);
+            var poseB = BakedMarshal(orange, out var matsB, "|Idle", 1.1f);
             var root = new GameObject("MarshalPosts").transform; root.SetParent(parent, false);
             int n = pts.Count; float acc = 0f; int side = 1;
             for (int i = 1; i < n; i++)
@@ -915,6 +989,16 @@ namespace OWR.EditorTools
                 g.AddComponent<MeshFilter>().sharedMesh = mesh;
                 g.AddComponent<MeshRenderer>().sharedMaterials = new[] { orange, hut, flag };
                 g.isStatic = true;
+                for (int m = 0; m < 2; m++)
+                {
+                    var f = new GameObject("Marshal");
+                    f.transform.SetParent(g.transform, false);
+                    f.transform.localPosition = new Vector3(1.6f, 0f, -0.6f + m * 1.2f);
+                    f.transform.localRotation = Quaternion.Euler(0f, 90f + (m == 0 ? -12f : 15f), 0f);   // facing the track
+                    f.AddComponent<MeshFilter>().sharedMesh = m == 0 ? poseA : poseB;
+                    f.AddComponent<MeshRenderer>().sharedMaterials = m == 0 ? matsA : matsB;
+                    f.isStatic = true;
+                }
             }
         }
 

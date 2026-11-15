@@ -51,6 +51,7 @@ namespace OWR.EditorTools
                 wl[i] = Mathf.Lerp(wl[i], PitWall, t);
             }
             FindLake();
+            standPlan = null; PlanStands();
             var spec = new TestSceneBuilder.TrackSpec
             {
                 name = "Interlagos", scenePath = ScenePath, pts = pts, wallLeft = wl, wallRight = wr,
@@ -128,14 +129,14 @@ namespace OWR.EditorTools
             if (ni >= 0)
             {
                 float flat = Mathf.Max(wl[ni], wr[ni]);
-                if (InPit(ni)) flat = Mathf.Max(flat, 46f);
+                if (InPit(ni)) flat = Mathf.Max(flat, 80f);   // garages + control tower reach ~55 m out: keep the whole pit complex on level ground
                 float near = pts[ni].y - 0.45f;
                 h = Mathf.Lerp(near, h, Smooth(flat + 2f, flat + 70f, d));
             }
             // the lake basin
             float ld = Vector2.Distance(new Vector2(x, z), lakeCentre);
             if (lakeRadius > 0f) h = Mathf.Lerp(lakeLevel - 2.5f, h, Smooth(lakeRadius * 0.85f, lakeRadius + 25f, ld));
-            return h;
+            return LevelForStands(x, z, h);
         }
 
         static float Smooth(float a, float b, float v) { float t = Mathf.Clamp01((v - a) / (b - a)); return t * t * (3f - 2f * t); }
@@ -346,7 +347,8 @@ namespace OWR.EditorTools
             var white = EnvironmentBuilder.GetMat($"{Root}/Materials/Pit_White.mat", "Universal Render Pipeline/Lit");
             white.SetColor("_BaseColor", new Color(0.86f, 0.87f, 0.88f)); white.SetFloat("_Smoothness", 0.45f);
             var dark = EnvironmentBuilder.GetMat($"{Root}/Materials/Pit_GarageDark.mat", "Universal Render Pipeline/Lit");
-            dark.SetColor("_BaseColor", new Color(0.05f, 0.05f, 0.055f)); dark.SetFloat("_Smoothness", 0.3f);
+            dark.SetColor("_BaseColor", new Color(0.55f, 0.56f, 0.58f)); dark.SetFloat("_Smoothness", 0.5f);   // lit garage interior, not a black hole
+            dark.EnableKeyword("_EMISSION"); dark.SetColor("_EmissionColor", new Color(0.18f, 0.18f, 0.19f));
             Color[] team = { new Color(1f, 0.38f, 0.06f), new Color(0.05f, 0.2f, 0.65f), new Color(0.55f, 0.03f, 0.05f), new Color(0.35f, 0.7f, 0.1f),
                              new Color(0.02f, 0.35f, 0.18f), new Color(0.85f, 0.15f, 0.45f), new Color(0.65f, 0.67f, 0.7f), new Color(0.03f, 0.03f, 0.035f),
                              new Color(0.95f, 0.75f, 0.05f), new Color(0.3f, 0.08f, 0.5f), new Color(0.25f, 0.55f, 0.85f), new Color(0.85f, 0.85f, 0.87f) };
@@ -356,7 +358,22 @@ namespace OWR.EditorTools
                 teamMats[t] = EnvironmentBuilder.GetMat($"{Root}/Materials/Pit_Team{t}.mat", "Universal Render Pipeline/Lit");
                 teamMats[t].SetColor("_BaseColor", team[t]); teamMats[t].SetFloat("_Smoothness", 0.6f);
             }
+            var light = EnvironmentBuilder.GetMat($"{Root}/Materials/Pit_Light.mat", "Universal Render Pipeline/Lit");
+            light.SetColor("_BaseColor", Color.white); light.EnableKeyword("_EMISSION"); light.SetColor("_EmissionColor", new Color(2.2f, 2.2f, 2.3f));
+            light.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            var rubber = EnvironmentBuilder.GetMat($"{Root}/Materials/TyreWall_Rubber.mat", "Universal Render Pipeline/Lit");
             var mats = new List<Material> { concrete, glass, white, dark }; mats.AddRange(teamMats);
+            int lightIdx = mats.Count; mats.Add(light); int rubberIdx = mats.Count; mats.Add(rubber);
+            var screen = EnvironmentBuilder.GetMat($"{Root}/Materials/Pit_Screen.mat", "Universal Render Pipeline/Lit");
+            screen.SetColor("_BaseColor", new Color(0.05f, 0.12f, 0.2f)); screen.EnableKeyword("_EMISSION"); screen.SetColor("_EmissionColor", new Color(0.15f, 0.45f, 0.8f));
+            int screenIdx = mats.Count; mats.Add(screen);
+            var graphite = EnvironmentBuilder.GetMat($"{Root}/Materials/Pit_Graphite.mat", "Universal Render Pipeline/Lit");
+            graphite.SetColor("_BaseColor", new Color(0.13f, 0.135f, 0.145f)); graphite.SetFloat("_Smoothness", 0.55f); graphite.SetFloat("_Metallic", 0.2f);
+            int gr = mats.Count; mats.Add(graphite);
+            // pit crew: the rigged figure baked in two poses; the overall colour slot is swapped per team
+            var crewTag = EnvironmentBuilder.GetMat($"{Root}/Materials/Crew_Tag.mat", "Universal Render Pipeline/Lit");
+            var crewA = EnvironmentBuilder.BakedMarshal(crewTag, out var crewMatsA, "|Idle_Neutral", 0.8f, "CrewA");
+            var crewB = EnvironmentBuilder.BakedMarshal(crewTag, out var crewMatsB, "|Interact", 0.5f, "CrewB");
             var k = new MeshKit(mats.Count);
             var logos = new BrandKit();
             float acc = 0f; int garage = 0;
@@ -373,30 +390,134 @@ namespace OWR.EditorTools
                 var rot = Quaternion.LookRotation(tan, Vector3.up);
                 Vector3 inward = -r;    // away from the track
                 Vector3 C(float back, float y, float along) => front + inward * back + Vector3.up * y + tan * along;
-                // ground floor: structure, dark open garage, team colour fascia
-                k.Box(0, C(depth * 0.5f, gH * 0.5f, 0f), new Vector3(depth, gH, 14.05f), rot);
-                k.Box(3, C(-0.02f, gH * 0.42f, 0f), new Vector3(0.1f, gH * 0.8f, 11.5f), rot);
-                k.Box(4 + garage % team.Length, C(-0.06f, gH * 0.9f, 0f), new Vector3(0.12f, gH * 0.16f, 13.8f), rot);
-                // hospitality floor: glass band, white floor slabs, roof
+                // ground floor: an open garage bay (lit white interior, team-colour back wall), solid side walls between bays
+                const float openH = 4.6f, recess = 7.5f, openW = 11f;
+                int tm = 4 + garage % team.Length;
+                k.Box(2, C(recess * 0.5f, 0.06f, 0f), new Vector3(recess, 0.12f, 14.05f), rot);                                   // epoxy floor
+                foreach (float sgn in new[] { -1f, 1f })
+                    k.Box(2, C(depth * 0.5f, gH * 0.5f, sgn * (14.05f - (14.05f - openW) * 0.5f) * 0.5f), new Vector3(depth, gH, (14.05f - openW) * 0.5f), rot);   // side walls / pillars
+                k.Box(2, C(recess * 0.5f, openH + (gH - openH) * 0.5f, 0f), new Vector3(recess, gH - openH, openW), rot);          // lintel + ceiling
+                k.Box(0, C(recess + (depth - recess) * 0.5f, gH * 0.5f, 0f), new Vector3(depth - recess, gH, openW), rot);           // back of house
+                k.Box(gr, C(recess - 0.06f, openH * 0.5f, 0f), new Vector3(0.12f, openH, openW), rot);                               // team back wall
+                for (int lt = -1; lt <= 1; lt++)                                                                                    // ceiling light strips
+                    k.Box(lightIdx, C(recess * 0.5f, openH - 0.05f, lt * 3.4f), new Vector3(recess - 1f, 0.06f, 0.35f), rot);
+                // tyre sets in heated blankets (team colour), real round stacks of four
+                foreach (float sgn in new[] { -1f, 1f })
+                    for (int ts = 0; ts < 3; ts++)
+                        for (int h = 0; h < 4; h++)
+                        {
+                            k.M = Matrix4x4.TRS(C(2.2f + ts * 1.5f, 0.24f + h * 0.36f, sgn * (openW * 0.5f - 0.75f)), rot * Quaternion.Euler(0f, 0f, 90f), Vector3.one);
+                            k.Lathe(h == 3 ? rubberIdx : gr, new List<Vector2> { new Vector2(-0.17f, 0.2f), new Vector2(-0.18f, 0.33f), new Vector2(-0.12f, 0.36f), new Vector2(0.12f, 0.36f), new Vector2(0.18f, 0.33f), new Vector2(0.17f, 0.2f), new Vector2(-0.17f, 0.2f) }, 16);
+                        }
+                k.M = Matrix4x4.identity;
+                // tool cabinets + workbench along the back wall, monitor gantry hanging from the ceiling
+                for (int tc = -2; tc <= 2; tc++)
+                    if (tc != 0) k.Box(gr, C(recess - 0.6f, 0.55f, tc * 1.15f), new Vector3(0.9f, 1.1f, 1.05f), rot);
+                k.Box(2, C(recess - 0.6f, 1.12f, 0f), new Vector3(0.95f, 0.06f, 5.2f), rot);                                         // worktop
+                k.Box(3, C(recess - 0.5f, 0.5f, 0f), new Vector3(0.8f, 1.0f, 1.0f), rot);                                            // fuel rig / trolley
+                k.Box(rubberIdx, C(1.6f, openH - 0.55f, 0f), new Vector3(0.12f, 0.12f, openW - 2f), rot);                          // gantry bar
+                for (int mo = -1; mo <= 1; mo += 2)
+                {
+                    k.Box(rubberIdx, C(1.55f, openH - 1.05f, mo * 1.3f), new Vector3(0.08f, 0.7f, 1.15f), rot);                    // timing monitors
+                    k.Box(screenIdx, C(1.5f, openH - 1.05f, mo * 1.3f), new Vector3(0.02f, 0.6f, 1.05f), rot);
+                }
+                logos.Quad(C(recess - 0.17f, 2.9f, 0f), tan, Vector3.up, 7f, 0.875f, garage * 3 + 1, false);                       // sponsor board on the back wall
+                // canopy over the doors with an LED strip, garage-number plate
+                k.Box(2, C(-1.1f, gH - 0.15f, 0f), new Vector3(2.4f, 0.3f, 14.05f), rot);
+                k.Box(lightIdx, C(-2.25f, gH - 0.33f, 0f), new Vector3(0.1f, 0.05f, 13.6f), rot);
+                // crew in team kit
+                for (int cw = 0; cw < 2; cw++)
+                {
+                    var crew = new GameObject("Crew");
+                    crew.transform.SetParent(root, false);
+                    crew.transform.position = C(cw == 0 ? 1.4f : 3.6f, 0.12f, cw == 0 ? -2.2f : 2.6f);
+                    crew.transform.rotation = rot * Quaternion.Euler(0f, cw == 0 ? 95f : 60f, 0f);
+                    crew.AddComponent<MeshFilter>().sharedMesh = cw == 0 ? crewA : crewB;
+                    var cm = (Material[])(cw == 0 ? crewMatsA : crewMatsB).Clone();
+                    for (int q = 0; q < cm.Length; q++) if (cm[q] == crewTag) cm[q] = teamMats[tm - 4];
+                    crew.AddComponent<MeshRenderer>().sharedMaterials = cm;
+                    crew.isStatic = true;
+                }
+                k.Box(2, C(0.25f, openH - 0.7f, 0f), new Vector3(0.1f, 1.4f, openW), rot);                                          // roller door, part raised
+                k.Box(gr, C(-0.06f, openH + (gH - openH) * 0.5f, 0f), new Vector3(0.12f, gH - openH - 0.2f, 13.6f), rot);           // team name board (graphite)
+                k.Box(tm, C(-0.08f, openH + 0.16f, 0f), new Vector3(0.12f, 0.08f, 13.6f), rot);                                    // thin team-colour trim
+                logos.Quad(C(-0.14f, openH + (gH - openH) * 0.5f, 0f), tan, Vector3.up, 10f, 1.25f, garage * 3 + 1, false);
+                foreach (float bx in new[] { -1.25f, -6.75f }) k.Box(2, C(bx, 0.03f, 0f), new Vector3(0.12f, 0.03f, 9f), rot);         // pit box: white outline
+                foreach (float bz in new[] { -4.5f, 4.5f }) k.Box(2, C(-4f, 0.03f, bz), new Vector3(5.5f, 0.03f, 0.12f), rot);
+                // hospitality floor: white slab, glazing with frames, roof
                 k.Box(2, C(depth * 0.5f - 1.2f, gH + 0.2f, 0f), new Vector3(depth + 2.4f, 0.4f, 14.05f), rot);
                 k.Box(1, C(depth * 0.5f, gH + 0.4f + upH * 0.5f, 0f), new Vector3(depth - 0.6f, upH, 14.05f), rot);
+                for (float mu = -7f; mu <= 7f; mu += 2.333f)
+                    k.Box(2, C(0.22f, gH + 0.4f + upH * 0.5f, mu), new Vector3(0.16f, upH, 0.14f), rot);
+                foreach (float ty in new[] { gH + 0.4f + upH * 0.38f, gH + 0.4f + upH * 0.82f })
+                    k.Box(2, C(0.2f, ty, 0f), new Vector3(0.12f, 0.1f, 14.05f), rot);                                             // transoms
+                k.Box(1, C(-2.25f, gH + 0.95f, 0f), new Vector3(0.05f, 1.1f, 14.05f), rot);                                         // glass balustrade
+                k.Box(2, C(-2.25f, gH + 1.52f, 0f), new Vector3(0.1f, 0.06f, 14.05f), rot);                                         // handrail
                 k.Box(2, C(depth * 0.5f - 1.5f, gH + upH + 0.6f, 0f), new Vector3(depth + 3f, 0.5f, 14.05f), rot);
                 // brand board on the front of the roof edge
                 logos.Quad(C(-2.9f, gH + upH + 1.6f, 0f), tan, Vector3.up, 12f, 1.5f, garage * 5 + 2, false);
-                k.Box(3, C(-2.75f, gH + upH + 1.6f, 0f), new Vector3(0.12f, 1.8f, 12.4f), rot);
+                k.Box(2, C(-2.75f, gH + upH + 1.6f, 0f), new Vector3(0.12f, 1.8f, 12.4f), rot);
                 garage++;
                 keepOut.Add(new Vector4(front.x + inward.x * 10f, front.z + inward.z * 10f, 24f, 0f));
+            }
+            // grandstands on the pit roof, facing the track (the left side of the straight gets a crowd too)
+            {
+                float roofY = gH + upH + 0.85f, acc2 = 999f; int n2 = 0;
+                for (int kk = GarageFrom + 10; kk <= GarageTo - 10; kk++)
+                {
+                    int i = Idx(kk);
+                    acc2 += Vector3.Distance(pts[i], pts[Idx(kk + 1)]);
+                    if (acc2 < 46f) continue;
+                    acc2 = 0f;
+                    Vector3 r = Right(i), tan = Tan(i);
+                    Vector3 pos = pts[i] - r * (PitLaneOuter + 1.5f) + Vector3.up * roofY;
+                    EnvironmentBuilder.BuildGrandstand(parent, "Grandstand_PitRoof_" + n2++, pos, Quaternion.LookRotation(tan, Vector3.up), 42f, 9, true,
+                        m.concrete, m.roof, m.seats, m.crowd, m.skin);
+                }
+                Debug.Log($"[OWR] Interlagos: {n2} pit-roof stands");
+            }
+            // team pit-wall gantries: a roofed stand with monitors on the pit-lane side of the wall
+            {
+                float acc3 = 999f; int gn = 0;
+                for (int kk = GarageFrom; kk <= GarageTo; kk++)
+                {
+                    int i = Idx(kk);
+                    acc3 += Vector3.Distance(pts[i], pts[Idx(kk + 1)]);
+                    if (acc3 < 28f) continue;
+                    acc3 = 0f;
+                    Vector3 r = Right(i), tan = Tan(i);
+                    var rot = Quaternion.LookRotation(tan, Vector3.up);
+                    Vector3 b = pts[i] - r * (PitWall + 1.4f);
+                    int tm = 4 + gn++ % team.Length;
+                    k.Box(2, b + Vector3.up * 0.6f, new Vector3(1.8f, 1.2f, 8f), rot);              // desk
+                    k.Box(3, b + Vector3.up * 1.55f + r * 0.5f, new Vector3(0.1f, 0.7f, 7f), rot);  // monitor bank
+                    foreach (float e in new[] { -3.8f, 3.8f }) k.Box(2, b + tan * e + Vector3.up * 1.6f, new Vector3(0.12f, 3.2f, 0.12f), rot);
+                    k.Box(gr, b + Vector3.up * 3.25f + r * 0.3f, new Vector3(2.8f, 0.18f, 8.6f), rot);   // canopy (graphite)
+                }
             }
             // race control tower behind the start line
             {
                 int i = Idx(-8); Vector3 r = Right(i), tan = Tan(i);
                 Vector3 b = pts[i] - r * (PitLaneOuter + depth + 12f);
                 var rot = Quaternion.LookRotation(tan, Vector3.up);
-                k.Box(0, b + Vector3.up * 12f, new Vector3(9f, 24f, 9f), rot);
-                k.Box(1, b + Vector3.up * 26.5f - r * 0.5f, new Vector3(13f, 5f, 11f), rot);
-                k.Box(2, b + Vector3.up * 29.4f - r * 0.5f, new Vector3(14f, 0.8f, 12f), rot);
-                logos.Quad(b + Vector3.up * 31.2f + r * 6.05f, tan, Vector3.up, 13f, 1.6f, 3, false);
-                k.Box(3, b + Vector3.up * 31.2f + r * 5.95f, new Vector3(0.15f, 2f, 13.4f), rot);
+                // race control: a tall concrete core with a glazed, outward-leaning cab well above the pit-roof stands
+                const float cabY = 40f;
+                k.Box(0, b + Vector3.up * (cabY * 0.5f - 2f), new Vector3(7f, cabY + 4f, 7f), rot);                       // core (4 m below grade)
+                k.Box(2, b + Vector3.up * (cabY * 0.5f) + tan * 4.2f, new Vector3(2.2f, cabY, 1.6f), rot);                 // lift shaft
+                k.Box(2, b + Vector3.up * cabY, new Vector3(14f, 0.6f, 14f), rot);                                          // cab floor slab
+                foreach (var (dir, along) in new[] { (r, tan), (-r, tan), (tan, r), (-tan, r) })
+                {
+                    var face = Quaternion.LookRotation(dir, Vector3.up);
+                    Vector3 c = b + dir * 6.5f + Vector3.up * (cabY + 2.6f);
+                    // glass leaning out at the top, like real control-tower cabs
+                    k.Box(1, c, new Vector3(13f, 4.4f, 0.12f), Quaternion.AngleAxis(12f, Vector3.Cross(Vector3.up, dir)) * face);
+                    for (float mu2 = -6f; mu2 <= 6.01f; mu2 += 2f)
+                        k.Box(2, c + along * mu2, new Vector3(0.14f, 4.4f, 0.2f), Quaternion.AngleAxis(12f, Vector3.Cross(Vector3.up, dir)) * face);
+                }
+                k.Box(2, b + Vector3.up * (cabY + 5.1f), new Vector3(16f, 0.5f, 16f), rot);                                 // roof overhang
+                k.Box(0, b + Vector3.up * (cabY + 5.9f), new Vector3(5f, 1.2f, 5f), rot);                                   // plant room
+                k.Box(rubberIdx, b + Vector3.up * (cabY + 9f) + tan * 1.5f, new Vector3(0.12f, 6f, 0.12f), rot);            // antenna masts
+                k.Box(rubberIdx, b + Vector3.up * (cabY + 8f) - tan * 1.5f, new Vector3(0.1f, 4f, 0.1f), rot);
                 keepOut.Add(new Vector4(b.x, b.z, 20f, 0f));
             }
             var g = EnvironmentBuilder.Obj("PitBuilding", root, k.Build("PitBuilding"), null);
@@ -406,8 +527,14 @@ namespace OWR.EditorTools
         }
 
         // ------------------------------------------------------------------ grandstands where the real ones are
-        static void BuildStands(Transform parent, TestSceneBuilder.TracksideMats m, List<Vector4> keepOut)
+        struct StandPlan { public Vector3 pos; public Quaternion rot; public int rows; public bool roof; public string name; public Vector3 back; }
+        static List<StandPlan> standPlan;
+        const float StandLen = 50f;
+
+        /// <summary>Picks the grandstand spots up front so the terrain can be levelled under each one (no stands buried in hills).</summary>
+        static void PlanStands()
         {
+            standPlan = new List<StandPlan>();
             // (from index, to index, side: +1 = right of the racing direction, rows, roof)
             var runs = new (int a, int b, int side, int rows, bool roof, string name)[]
             {
@@ -434,14 +561,43 @@ namespace OWR.EditorTools
                     Vector3 pos = pts[i] + r * run.side * (WallAt(i, run.side) + 4.5f);
                     pos.y = pts[i].y - 0.45f;
                     var rot = Quaternion.LookRotation(run.side > 0 ? -tan : tan, Vector3.up);
-                    if (!EnvironmentBuilder.ClearOfTrack(pts, pos, rot, 50f, run.rows, 13.5f)) continue;
-                    EnvironmentBuilder.BuildGrandstand(parent, $"Grandstand_{run.name}_{count}", pos, rot, 50f, run.rows, run.roof,
-                        m.concrete, m.roof, m.seats, m.crowd, m.skin);
-                    keepOut.Add(new Vector4(pos.x - r.x * run.side * 10f, pos.z - r.z * run.side * 10f, 42f, 0f));
+                    if (!EnvironmentBuilder.ClearOfTrack(pts, pos, rot, StandLen, run.rows, 13.5f)) continue;
+                    standPlan.Add(new StandPlan { pos = pos, rot = rot, rows = run.rows, roof = run.roof, name = $"{run.name}_{count}", back = r * run.side });
                     count++;
                 }
             }
-            Debug.Log($"[OWR] Interlagos: {count} grandstand sections");
+        }
+
+        /// <summary>Blends the ground to each stand's base height over its footprint (+ a 22 m apron).</summary>
+        static float LevelForStands(float x, float z, float h)
+        {
+            if (standPlan == null) return h;
+            foreach (var sp in standPlan)
+            {
+                Vector3 d = new Vector3(x - sp.pos.x, 0f, z - sp.pos.z);
+                if (d.sqrMagnitude > 90f * 90f) continue;
+                Vector3 lx = sp.rot * Vector3.right, lz = sp.rot * Vector3.forward;
+                float px = Vector3.Dot(d, lx), pz = Vector3.Dot(d, lz);
+                float backX = -sp.rows * 0.95f - 2.5f;          // stands rise toward local -x
+                float ox = px > 3f ? px - 3f : (px < backX ? backX - px : 0f);
+                float oz = Mathf.Max(0f, Mathf.Abs(pz) - StandLen * 0.5f - 2f);
+                float outside = Mathf.Sqrt(ox * ox + oz * oz);
+                h = Mathf.Lerp(sp.pos.y - 0.05f, h, Smooth(0f, 22f, outside));
+            }
+            return h;
+        }
+
+        // ------------------------------------------------------------------ grandstands where the real ones are
+        static void BuildStands(Transform parent, TestSceneBuilder.TracksideMats m, List<Vector4> keepOut)
+        {
+            if (standPlan == null) PlanStands();
+            foreach (var sp in standPlan)
+            {
+                EnvironmentBuilder.BuildGrandstand(parent, "Grandstand_" + sp.name, sp.pos, sp.rot, StandLen, sp.rows, sp.roof,
+                    m.concrete, m.roof, m.seats, m.crowd, m.skin);
+                keepOut.Add(new Vector4(sp.pos.x - sp.back.x * 10f, sp.pos.z - sp.back.z * 10f, 42f, 0f));
+            }
+            Debug.Log($"[OWR] Interlagos: {standPlan.Count} grandstand sections");
         }
 
         // ------------------------------------------------------------------ advertising bridges over the track

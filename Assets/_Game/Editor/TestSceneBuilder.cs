@@ -63,6 +63,7 @@ namespace OWR.EditorTools
 
         public static void BuildScene(TrackSpec spec)
         {
+            RaceBuilder.TrackTag = spec.name;
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             float RoadWidth = spec.roadWidth;
             EnsureFolder(Root + "/Scenes");
@@ -121,7 +122,7 @@ namespace OWR.EditorTools
             }
             int n = pts.Count;
             var road = MeshObject("Road", trackRoot, BuildRibbon(pts, 0, n, true, -RoadWidth / 2f, RoadWidth / 2f, 0.02f, 0.02f), mRoad, true);
-            SaveMesh(road.GetComponent<MeshFilter>().sharedMesh, "Road");
+            SaveMesh(road.GetComponent<MeshFilter>().sharedMesh, spec.name == "Classic" ? "Road" : "Road_" + spec.name);   // one asset per track, or the last build overwrites the other track's road
             MeshObject("Line_L", trackRoot, BuildRibbon(pts, 0, n, true, -RoadWidth / 2f + 0.25f, -RoadWidth / 2f + 0.5f, 0.024f, 0.024f), mLine, false);
             MeshObject("Line_R", trackRoot, BuildRibbon(pts, 0, n, true, RoadWidth / 2f - 0.5f, RoadWidth / 2f - 0.25f, 0.024f, 0.024f), mLine, false);
 

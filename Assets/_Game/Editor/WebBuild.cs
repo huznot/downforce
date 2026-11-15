@@ -32,7 +32,9 @@ namespace OWR.EditorTools
             PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.WebGL, false);
             PlayerSettings.SetGraphicsAPIs(BuildTarget.WebGL, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3 });
 
-            if (Directory.Exists(Out)) Directory.Delete(Out, true);
+            if (Directory.Exists(Out))   // clear the old build; the folder itself may be held open by Explorer, so keep it
+                foreach (var e in Directory.GetFileSystemEntries(Out))
+                    if (Directory.Exists(e)) Directory.Delete(e, true); else File.Delete(e);
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = BuildScenes(),

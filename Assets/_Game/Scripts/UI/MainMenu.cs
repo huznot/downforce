@@ -95,6 +95,12 @@ namespace OWR.UI
             var sub = Label(tb, "Sub", subtitle, titleFont, 76, new Vector2(0, -168), new Vector2(1000, 90), Cream);
             sub.gameObject.AddComponent<Shadow>().effectColor = CreamShadow;
 
+            // credit, bottom-right on every menu page
+            var credit = Label(root, "Credit", "MADE BY MUHAMMAD IRFAN", uiFont, 30, Vector2.zero, new Vector2(900, 50), Cream);
+            var cr = credit.rectTransform; cr.anchorMin = cr.anchorMax = cr.pivot = new Vector2(1f, 0f); cr.anchoredPosition = new Vector2(-48f, 36f);
+            credit.alignment = TextAnchor.LowerRight; credit.color = new Color(Cream.r, Cream.g, Cream.b, 0.8f);
+            credit.gameObject.AddComponent<Shadow>().effectColor = new Color(0f, 0f, 0f, 0.6f);
+
             var pg = Rect(root, "Press", new Vector2(0, -170), new Vector2(1200, 80));
             pressGroup = pg.gameObject.AddComponent<CanvasGroup>();
             var press = Label(pg, "Text", Input.TouchControls.IsTouchDevice ? "T A P   T O   S T A R T" : "P R E S S   A N Y   B U T T O N", uiFont, 40, Vector2.zero, new Vector2(1200, 80), Cream);

@@ -2,6 +2,8 @@
 
 # Downforce
 
+Made by Muhammad Irfan.
+
 An open-wheel racing game made in Unity. Wet races at a 1:1 Interlagos (real layout and elevation) or the original classic track, from the cockpit against a full grid, with free practice and a T-cam.
 
 ## Demo
@@ -36,6 +38,7 @@ Some trackside props use the free *Lowpoly Track Environment Free* pack by BEDRI
 ## Credits
 - Interlagos layout from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) (MIT)
 - Elevation from SRTM 30 m data via [OpenTopoData](https://www.opentopodata.org)
+- Marshal and pit crew figure: "Worker" by Quaternius (CC0)
 - Textures from Poly Haven and ambientCG (CC0), hands from WebXR input profiles (MIT)
 - All teams, drivers and sponsors are invented
 

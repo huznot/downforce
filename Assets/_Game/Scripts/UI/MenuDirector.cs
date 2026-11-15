@@ -51,6 +51,32 @@ namespace OWR.UI
             if (race.Player != null) { playerEngine = race.Player.car.GetComponent<AudioFX.EngineAudio>(); if (playerEngine) { playerEngineVol = playerEngine.volume; playerEngine.volume = 0f; } }
             foreach (var e in race.entries) gridCentre += e.car.transform.position;
             gridCentre /= Mathf.Max(1, race.entries.Count);
+            // crane side: the open side of the straight (not into the pit building / garages)
+            Vector3 f0 = path ? path.TangentAt(0f) : Vector3.forward, r0 = Vector3.Cross(Vector3.up, f0);
+            craneSide = Blocked(gridCentre + Vector3.up * 0.6f, gridCentre - r0 * 34f + Vector3.up * 14f - f0 * 18f) ? -1f : 1f;
+        }
+
+        float craneSide = 1f;
+
+        /// <summary>True if scenery (not a car) sits between the target and the camera spot.</summary>
+        static bool Blocked(Vector3 target, Vector3 cam) => Hit(target, cam, out _);
+
+        static bool Hit(Vector3 target, Vector3 cam, out float dist)
+        {
+            dist = float.MaxValue;
+            Vector3 d = cam - target; float len = d.magnitude;
+            if (len < 0.01f) return false;
+            foreach (var h in Physics.RaycastAll(target, d / len, len + 1.5f, ~0, QueryTriggerInteraction.Ignore))
+                if (!h.collider.attachedRigidbody && h.distance < dist) dist = h.distance;
+            return dist < float.MaxValue;
+        }
+
+        /// <summary>Pulls the camera in front of any wall, building or hill between it and what it looks at.</summary>
+        static Vector3 Unblock(Vector3 target, Vector3 cam)
+        {
+            if (!Hit(target, cam, out float dist)) return cam;
+            Vector3 d = (cam - target).normalized;
+            return target + d * Mathf.Max(2f, dist - 1.5f);
         }
 
         static void SetListener(Camera c, bool on) { var l = c ? c.GetComponent<AudioListener>() : null; if (l) l.enabled = on; }
@@ -82,7 +108,7 @@ namespace OWR.UI
                 {
                     float a = 40f + t * 6f;
                     Vector3 o = Quaternion.Euler(0f, a, 0f) * Vector3.forward * 22f;
-                    cam.position = gridCentre + o + Vector3.up * (5f + Mathf.Sin(t * 0.3f));
+                    cam.position = Unblock(gridCentre + Vector3.up * 0.6f, gridCentre + o + Vector3.up * (5f + Mathf.Sin(t * 0.3f)));
                     cam.LookAt(gridCentre + Vector3.up * 0.6f);
                     droneCam.fieldOfView = 45f;
                     break;
@@ -90,7 +116,7 @@ namespace OWR.UI
                 case 1: // low dolly along the line of cars
                 {
                     Vector3 back = cars[cars.Count - 1].car.transform.position;
-                    cam.position = back + right * 6.5f + fwd * (t * 9f - 6f) + Vector3.up * 0.75f;
+                    cam.position = Unblock(back + Vector3.up * 0.75f, back + right * 6.5f + fwd * (t * 9f - 6f) + Vector3.up * 0.75f);
                     cam.LookAt(cam.position + fwd * 12f - right * 5f + Vector3.down * 0.6f);
                     droneCam.fieldOfView = 50f;
                     break;
@@ -105,7 +131,7 @@ namespace OWR.UI
                 }
                 case 3: // crane over the main grandstand, looking down on the grid
                 {
-                    cam.position = gridCentre - right * 34f + Vector3.up * (12f + t * 1.6f) - fwd * 18f;
+                    cam.position = Unblock(gridCentre + fwd * 10f, gridCentre - right * 34f * craneSide + Vector3.up * (12f + t * 1.6f) - fwd * 18f);
                     cam.LookAt(gridCentre + fwd * 10f);
                     droneCam.fieldOfView = 42f;
                     break;
@@ -114,7 +140,7 @@ namespace OWR.UI
                 {
                     Vector3 centre = path ? Centroid() : gridCentre;
                     Vector3 o = Quaternion.Euler(0f, 200f + t * 3f, 0f) * Vector3.forward * 260f;
-                    cam.position = centre + o + Vector3.up * 120f;
+                    cam.position = Unblock(centre, centre + o + Vector3.up * 120f);
                     cam.LookAt(centre);
                     droneCam.fieldOfView = 55f;
                     break;

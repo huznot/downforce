@@ -9,7 +9,7 @@ import edge_tts
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'Assets', '_Game', 'Audio', 'Commentary')
 COMMENTATOR = 'en-GB-RyanNeural'
-DRIVER = 'en-GB-ThomasNeural'
+DRIVER = 'en-AU-WilliamNeural'   # distinct from the commentator; radio-filtered below
 
 # (key, text, voice, rate, pitch)  -- big moments get more pace and lift
 CALM, HYPE, MAX = ('+22%', '+2Hz'), ('+32%', '+7Hz'), ('+40%', '+12Hz')
@@ -54,10 +54,12 @@ LINES = [
     ('pb_2', "Faster again! The lap times keep tumbling!", *HYPE),
 ]
 RADIO = [
-    ('yes_1', "YESSSS! YES! GET IN THERE! Come on!", DRIVER, '+30%', '+12Hz'),
-    ('yes_2', "WOOOO! YES, YES, YES! What a race guys! Thank you!", DRIVER, '+30%', '+12Hz'),
-    ('yes_3', "Come ON! YES! Get in! What a car, what a team!", DRIVER, '+30%', '+12Hz'),
+    ('yes_1', "Yes! We won it! P1, P1! Thank you guys!", DRIVER, '+12%', '+4Hz'),
+    ('yes_2', "Woooo! Race winner! What a car, what a team!", DRIVER, '+12%', '+4Hz'),
+    ('yes_3', "That's P1! Unbelievable job everyone, thank you!", DRIVER, '+12%', '+4Hz'),
 ]
+# team-radio sound: narrow band, compressed, a little grit
+RADIO_FX = "highpass=f=450,lowpass=f=3200,acompressor=threshold=0.1:ratio=6:attack=5:release=60,acrusher=bits=10:mix=0.25,volume=1.6"
 
 
 async def render(key, text, voice, rate, pitch):
@@ -66,14 +68,25 @@ async def render(key, text, voice, rate, pitch):
     return key, text
 
 
+def radio_fx(key):
+    import subprocess
+    src = os.path.join(OUT, key + '.mp3'); tmp = src + '.tmp.mp3'
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', src, '-af', RADIO_FX, tmp], check=True)
+    os.replace(tmp, src)
+
+
 async def main():
+    import sys
+    radio_only = '--radio' in sys.argv
     os.makedirs(OUT, exist_ok=True)
     for old in glob.glob(os.path.join(OUT, '*.wav')) + glob.glob(os.path.join(OUT, '*.wav.meta')):
         os.remove(old)
-    jobs = [render(k, t, COMMENTATOR, r, p) for (k, t, r, p) in LINES] + [render(k, t, v, r, p) for (k, t, v, r, p) in RADIO]
-    manifest = {}
+    jobs = ([] if radio_only else [render(k, t, COMMENTATOR, r, p) for (k, t, r, p) in LINES]) + [render(k, t, v, r, p) for (k, t, v, r, p) in RADIO]
+    mpath = os.path.join(OUT, 'lines.json')
+    manifest = json.load(open(mpath, encoding='utf-8')) if radio_only and os.path.exists(mpath) else {}
     for k, t in await asyncio.gather(*jobs):
         manifest[k] = t
+    for k, *_ in RADIO: radio_fx(k)
     with open(os.path.join(OUT, 'lines.json'), 'w', encoding='utf-8') as f:
         json.dump(manifest, f, indent=1)
     print(len(manifest), 'lines rendered')

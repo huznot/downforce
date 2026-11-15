@@ -11,6 +11,9 @@ namespace OWR.EditorTools
     /// <summary>Turns the test scene into a race: path, painted start/finish + grid, start-light gantry, AI field, managers, HUD.</summary>
     public static class RaceBuilder
     {
+        /// <summary>Name of the track being built (set by TestSceneBuilder.BuildScene); keeps world-space mesh assets per track.</summary>
+        public static string TrackTag = "Classic";
+
         const string Root = "Assets/_Game";
         public const int StartIndex = 60;   // centreline sample used as the start/finish line
         const int CarLayer = 2;
@@ -390,7 +393,7 @@ namespace OWR.EditorTools
             m.uv = new[] { new Vector2(0, 0), new Vector2(tilesU, 0), new Vector2(tilesU, tilesV), new Vector2(0, tilesV) };
             m.triangles = new[] { 0, 3, 2, 0, 2, 1 };
             m.RecalculateNormals(); m.RecalculateTangents(); m.RecalculateBounds();
-            string p = Root + "/Meshes/StartFinishStrip.asset"; AssetDatabase.DeleteAsset(p); AssetDatabase.CreateAsset(m, p);
+            string p = Root + "/Meshes/StartFinishStrip" + (TrackTag == "Classic" ? "" : "_" + TrackTag) + ".asset"; AssetDatabase.DeleteAsset(p); AssetDatabase.CreateAsset(m, p);   // per track: the strip is in world space
             return m;
         }
 
@@ -480,20 +483,16 @@ namespace OWR.EditorTools
 
             var marshal = new GameObject("FlagMarshal").transform;
             marshal.SetParent(g.transform, false); marshal.localPosition = new Vector3(0f, deck + 0.06f, 0.1f);
-            for (int s = -1; s <= 1; s += 2) Cube(marshal, orange, new Vector3(s * 0.11f, 0.45f, 0f), new Vector3(0.16f, 0.9f, 0.2f));
-            Cube(marshal, orange, new Vector3(0f, 1.2f, 0f), new Vector3(0.46f, 0.62f, 0.26f));
-            Cube(marshal, orange, new Vector3(0.27f, 1.16f, 0f), new Vector3(0.11f, 0.58f, 0.13f));   // other arm, resting
-            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            Object.DestroyImmediate(head.GetComponent<Collider>());
-            head.transform.SetParent(marshal, false); head.transform.localPosition = new Vector3(0f, 1.67f, 0f); head.transform.localScale = Vector3.one * 0.27f;
-            head.GetComponent<Renderer>().sharedMaterial = white;
-
+            // the marshal: a rigged low-poly figure (Quaternius Worker, CC0) in orange overalls; his left arm follows the flag pivot
+            var fig = EnvironmentBuilder.MarshalFigure(marshal, orange, out var idleClip);
+            Transform Bone(string n) { foreach (var t in fig.GetComponentsInChildren<Transform>()) if (t.name == n) return t; return null; }
+            Transform upper = Bone("UpperArm.L"), lower = Bone("LowerArm.L"), wrist = Bone("Wrist.L");
             var shoulder = new GameObject("Shoulder").transform;
-            shoulder.SetParent(marshal, false); shoulder.localPosition = new Vector3(-0.27f, 1.44f, 0f);
-            Cube(shoulder, orange, new Vector3(0f, -0.3f, 0f), new Vector3(0.12f, 0.62f, 0.13f));
-            Cube(shoulder, dark, new Vector3(0f, -0.64f, 0f), new Vector3(0.11f, 0.1f, 0.11f));       // glove
+            shoulder.SetParent(marshal, false); shoulder.position = upper.position;
+            float reach = Vector3.Distance(upper.position, lower.position) + Vector3.Distance(lower.position, wrist.position);
+            reach /= marshal.lossyScale.y;
             var pole = new GameObject("Pole").transform;
-            pole.SetParent(shoulder, false); pole.localPosition = new Vector3(0f, -0.64f, 0f);
+            pole.SetParent(shoulder, false); pole.localPosition = new Vector3(0f, -reach, 0f);
             Cube(pole, dark, new Vector3(0f, -0.55f, 0f), new Vector3(0.035f, 1.3f, 0.035f));
             var furled = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             Object.DestroyImmediate(furled.GetComponent<Collider>());
@@ -509,6 +508,8 @@ namespace OWR.EditorTools
 
             var flag = g.AddComponent<OWR.Track.ChequeredFlag>();
             flag.shoulder = shoulder; flag.pole = pole; flag.cloth = mf; flag.furled = furled;
+            var rig = fig.AddComponent<OWR.Track.MarshalRig>();
+            rig.idle = idleClip; rig.body = fig.transform; rig.upperArm = upper; rig.lowerArm = lower; rig.wrist = wrist; rig.target = pole;
             foreach (var c in g.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
         }
 
