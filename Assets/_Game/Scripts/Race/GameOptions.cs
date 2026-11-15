@@ -10,6 +10,28 @@ namespace OWR.Race
     {
         /// <summary>Set by Restart / Race Again so the reloaded scene skips the menu and goes straight to the grid.</summary>
         public static bool SkipMenuOnce;
+        /// <summary>Set when the track is switched from the menu: the new scene opens straight on the menu page.</summary>
+        public static bool ReturnToMenuOnce;
+
+        /// <summary>Circuits: scene name and menu label. The first is the default.</summary>
+        public static readonly string[] TrackScenes = { "Interlagos", "Race" };
+        public static readonly string[] TrackLabels = { "INTERLAGOS", "CLASSIC" };
+        public static int TrackIndex
+        {
+            get => Mathf.Clamp(PlayerPrefs.GetInt("OWR_Track", 0), 0, TrackScenes.Length - 1);
+            set { PlayerPrefs.SetInt("OWR_Track", value); PlayerPrefs.Save(); }
+        }
+
+        /// <summary>At boot, open the circuit the player picked last time (if it is in the build).</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void OpenChosenTrack()
+        {
+            string want = TrackScenes[TrackIndex];
+            var active = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            if (active == want || System.Array.IndexOf(TrackScenes, active) < 0) return;
+            if (!Application.CanStreamedLevelBeLoaded(want)) return;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(want);
+        }
 
         public static Difficulty Difficulty
         {
@@ -27,7 +49,7 @@ namespace OWR.Race
         public static GameMode Mode = GameMode.Race;
         public static bool Practice => Mode == GameMode.Practice;
 
-        public static readonly int[] LapChoices = { 3, 5, 8, 12, 20 };
+        public static readonly int[] LapChoices = { 3, 5, 10, 15, 30 };
         public static int Laps
         {
             get => PlayerPrefs.GetInt("OWR_Laps", 5);

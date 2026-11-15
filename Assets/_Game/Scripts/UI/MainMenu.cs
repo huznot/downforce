@@ -41,6 +41,7 @@ namespace OWR.UI
             StartCoroutine(FadeIn());
             if (music) { music.volume = 0f; music.loop = true; music.Play(); StartCoroutine(FadeMusic(0.75f, 3f)); }
             if (Race.GameOptions.AutoDrive) StartCoroutine(AutoFlow());
+            if (Race.GameOptions.ReturnToMenuOnce) { Race.GameOptions.ReturnToMenuOnce = false; Show(Page.Menu); }
         }
 
         IEnumerator FadeMusic(float to, float seconds)
@@ -102,6 +103,14 @@ namespace OWR.UI
             // ---- main page: modes first ----
             var mg = Rect(root, "Menu", new Vector2(-560, -90), new Vector2(800, 520));
             menuGroup = mg.gameObject.AddComponent<CanvasGroup>();
+            var trackBtn = Option(mg, new Vector2(0, 255), TrackText, () =>
+            {
+                Race.GameOptions.TrackIndex = (Race.GameOptions.TrackIndex + 1) % Race.GameOptions.TrackScenes.Length;
+                string scene = Race.GameOptions.TrackScenes[Race.GameOptions.TrackIndex];
+                if (Application.CanStreamedLevelBeLoaded(scene)) { Race.GameOptions.ReturnToMenuOnce = true; StartCoroutine(SwitchTrack(scene)); }
+            });
+            ((RectTransform)trackBtn.transform).sizeDelta = new Vector2(620, 60);
+            trackBtn.GetComponentInChildren<Text>().fontSize = 40;
             firstMenuButton = MenuButton(mg, "RACE", new Vector2(0, 160), () => { Race.GameOptions.Mode = Race.GameMode.Race; StartCoroutine(StartRace()); }).gameObject;
             MenuButton(mg, "FREE PRACTICE", new Vector2(0, 75), () => { Race.GameOptions.Mode = Race.GameMode.Practice; StartCoroutine(StartRace()); });
             MenuButton(mg, "SETTINGS", new Vector2(0, -10), () => Show(Page.Settings));
@@ -160,6 +169,15 @@ namespace OWR.UI
             fg.anchorMin = Vector2.zero; fg.anchorMax = Vector2.one;
             fadeGroup = fg.gameObject.AddComponent<CanvasGroup>();
             var fimg = fg.gameObject.AddComponent<Image>(); fimg.color = Color.black; fimg.raycastTarget = false;
+        }
+
+        static string TrackText() => "TRACK:  " + Race.GameOptions.TrackLabels[Race.GameOptions.TrackIndex];
+
+        IEnumerator SwitchTrack(string scene)
+        {
+            for (float t = 0; t < 0.35f; t += Time.unscaledDeltaTime) { fadeGroup.alpha = t / 0.35f; yield return null; }
+            fadeGroup.alpha = 1f;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(scene);
         }
 
         static string LapsText() => "RACE LAPS:  " + Race.GameOptions.Laps;

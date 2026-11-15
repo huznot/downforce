@@ -62,12 +62,19 @@ namespace OWR.EditorTools
             System.IO.Directory.CreateDirectory("Builds/Android");
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
-                scenes = new[] { RacePath },
+                scenes = BuildScenes(),
                 locationPathName = outPath,
                 target = BuildTarget.Android,
                 options = BuildOptions.None,
             });
             Debug.Log($"[OWR] Android build ({(aab ? "AAB" : "APK")}, {(signed ? "upload-key signed" : "debug signed")}): {report.summary.result}  size {report.summary.totalSize / (1024 * 1024)} MB  errors {report.summary.totalErrors}");
+        }
+    
+        /// <summary>Interlagos first (the default circuit), then the classic track.</summary>
+        public static string[] BuildScenes()
+        {
+            const string interlagos = "Assets/_Game/Scenes/Interlagos.unity";
+            return System.IO.File.Exists(interlagos) ? new[] { interlagos, "Assets/_Game/Scenes/Race.unity" } : new[] { "Assets/_Game/Scenes/Race.unity" };
         }
     }
 }

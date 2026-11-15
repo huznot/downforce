@@ -159,7 +159,7 @@ namespace OWR.EditorTools
             PlayerSettings.resizableWindow = true;
             var opts = new BuildPlayerOptions
             {
-                scenes = new[] { RacePath },
+                scenes = BuildScenes(),
                 locationPathName = "Builds/Windows/Downforce.exe",
                 target = BuildTarget.StandaloneWindows64,
                 options = BuildOptions.None,
@@ -171,7 +171,7 @@ namespace OWR.EditorTools
         static void SetBuildScenes()
         {
             // the menu now runs inside the race scene (drone shots of the real grid), so the build is one scene
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(RacePath, true) };
+            EditorBuildSettings.scenes = System.Array.ConvertAll(BuildScenes(), p => new EditorBuildSettingsScene(p, true));
         }
 
         static void AddMesh(Transform parent, string meshName, Vector3 pos, Material m, bool mirror = false)
@@ -204,6 +204,13 @@ namespace OWR.EditorTools
             t.Apply();
             AssetDatabase.CreateAsset(t, p);
             return t;
+        }
+    
+        /// <summary>Interlagos first (the default circuit), then the classic track.</summary>
+        public static string[] BuildScenes()
+        {
+            const string interlagos = "Assets/_Game/Scenes/Interlagos.unity";
+            return System.IO.File.Exists(interlagos) ? new[] { interlagos, "Assets/_Game/Scenes/Race.unity" } : new[] { "Assets/_Game/Scenes/Race.unity" };
         }
     }
 }

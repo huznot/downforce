@@ -53,7 +53,9 @@ namespace OWR.Race
                 {
                     int j = (i + 1) % n;
                     float ds = Vector3.Distance(points[i], points[j]);
-                    speed[i] = Mathf.Min(speed[i], Mathf.Sqrt(speed[j] * speed[j] + 2f * brakeDecel * ds));
+                    // gravity helps braking uphill and works against it downhill (Senna S, Descida do Lago)
+                    float decel = Mathf.Max(brakeDecel * 0.6f, brakeDecel + 9.81f * (points[j].y - points[i].y) / Mathf.Max(ds, 0.01f));
+                    speed[i] = Mathf.Min(speed[i], Mathf.Sqrt(speed[j] * speed[j] + 2f * decel * ds));
                 }
             ready = true;
         }

@@ -34,12 +34,12 @@ namespace OWR.EditorTools
         };
         const int PlayerSlot = 7; // starts P8 of 12
 
-        public static void Setup(GameObject player, CarController ctrl, List<Vector3> pts, Transform trackRoot, float roadWidth, Transform spawn)
+        public static void Setup(GameObject player, CarController ctrl, List<Vector3> pts, Transform trackRoot, float roadWidth, Transform spawn, int startIndex = StartIndex)
         {
             // ---------------- path (index 0 = start line) ----------------
             int n = pts.Count;
             var rotated = new Vector3[n];
-            for (int i = 0; i < n; i++) rotated[i] = pts[(i + StartIndex) % n];
+            for (int i = 0; i < n; i++) rotated[i] = pts[(i + startIndex) % n];
             var path = trackRoot.gameObject.AddComponent<TrackPath>();
             path.points = rotated;
             path.roadWidth = roadWidth;

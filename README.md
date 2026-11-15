@@ -2,7 +2,7 @@
 
 # Downforce
 
-A short open-wheel racing game made in Unity. One wet race from the cockpit against a full grid, with free practice and a T-cam.
+An open-wheel racing game made in Unity. Wet races at a 1:1 Interlagos (real layout and elevation) or the original classic track, from the cockpit against a full grid, with free practice and a T-cam.
 
 ## Demo
 [Watch the playthrough](https://www.youtube.com/watch?v=3Vs1ufC0Vrs)
@@ -19,7 +19,8 @@ Controls: WASD or arrow keys, any gamepad, or mouse steering (Settings). C chang
 ## Run from source
 1. Install Unity 6000.2.12f1 and [Git LFS](https://git-lfs.com) (the race scene is stored with LFS)
 2. Clone this repo, then add the folder in Unity Hub
-3. Open `Assets/_Game/Scenes/Race.unity` and press Play
+3. Run **OWR > Build Circuit: Interlagos** once (it generates the Interlagos scene, about 2 minutes)
+4. Open `Assets/_Game/Scenes/Interlagos.unity` (or `Race.unity` for the classic track) and press Play
 
 Some trackside props use the free *Lowpoly Track Environment Free* pack by BEDRILL from the Unity Asset Store. It isn't included here; import it into `Assets/BEDRILL` to get them.
 
@@ -31,6 +32,12 @@ Some trackside props use the free *Lowpoly Track Environment Free* pack by BEDRI
 | `Assets/Settings` | render pipeline settings |
 | `Assets/WebGLTemplates` | the web page used for the browser build |
 | `Tools` | build-time scripts (audio, trailer) |
+
+## Credits
+- Interlagos layout from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) (MIT)
+- Elevation from SRTM 30 m data via [OpenTopoData](https://www.opentopodata.org)
+- Textures from Poly Haven and ambientCG (CC0), hands from WebXR input profiles (MIT)
+- All teams, drivers and sponsors are invented
 
 ## License
 MIT, see [LICENSE](LICENSE).

@@ -346,7 +346,7 @@ namespace OWR.EditorTools
             Material bark, Material leaves, Material concrete, Material roof, Material[] seatMats, Material[] crowdMats, Material skin)
         {
             BuildCatchFence(pts, wallOffset, parent, fenceMat, postMat);
-            BuildSponsorBoards(pts, wallOffset, parent);
+            BuildSponsorBoards(pts, (i, s) => wallOffset, parent);
 
             var keepOut = new List<Vector4>(); // x, z, radius (trees avoid stands)
             BuildGrandstand(parent, "Grandstand_Main", new Vector3(-(wallOffset + 5f), 0f, 30f), Quaternion.identity, 180f, 14, true,
@@ -394,9 +394,9 @@ namespace OWR.EditorTools
                 }
             }
 
-            BuildTyreWalls(pts, wallOffset, parent);
-            BuildMarshalPosts(pts, wallOffset, parent, crowdMats);
-            BuildPoles(pts, wallOffset, parent);
+            BuildTyreWalls(pts, (i, s) => wallOffset, parent);
+            BuildMarshalPosts(pts, (i, s) => wallOffset, parent, crowdMats);
+            BuildPoles(pts, (i, s) => wallOffset, parent);
             BuildTrees(pts, wallOffset, parent, bark, leaves, keepOut);
         }
 
@@ -408,7 +408,7 @@ namespace OWR.EditorTools
         }
 
         /// <summary>True when a stand's footprint stays clear of every part of the circuit.</summary>
-        static bool ClearOfTrack(List<Vector3> pts, Vector3 pos, Quaternion rot, float length, int rows, float wallOffset)
+        public static bool ClearOfTrack(List<Vector3> pts, Vector3 pos, Quaternion rot, float length, int rows, float wallOffset)
         {
             float depth = rows * 0.95f + 2f;
             for (float z = -length / 2f; z <= length / 2f; z += 6f)
@@ -458,61 +458,60 @@ namespace OWR.EditorTools
             }
         }
 
-        static void BuildSponsorBoards(List<Vector3> pts, float wallOffset, Transform parent)
+        public static void BuildSponsorBoards(List<Vector3> pts, System.Func<int, int, float> wallAt, Transform parent)
         {
             int n = pts.Count;
             var root = new GameObject("SponsorBoards").transform;
             root.SetParent(parent, false);
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            var boardMats = new Material[Brands.Length];
-            for (int b = 0; b < Brands.Length; b++)
-            {
-                boardMats[b] = GetMat($"{Root}/Materials/Board_{Brands[b]}.mat", "Universal Render Pipeline/Lit");
-                boardMats[b].SetColor("_BaseColor", BrandBg[b]);
-                boardMats[b].SetFloat("_Smoothness", 0.55f);
-            }
-            float acc = 0f;
+            var frame = BrandKit.FrameMat();
+            var kit = new BrandKit();
+            var fk = new MeshKit(1);
+            // each board is a straight chord fitted to the barrier: as long as the wall stays within 6 cm of it
+            // (up to 7.6 m), shorter on bends, none on tight corners - so boards sit flush on the wall face
             int idx = 0;
-            for (int i = 1; i < n; i++)
+            for (int side = -1; side <= 1; side += 2)
             {
-                acc += Vector3.Distance(pts[i], pts[i - 1]);
-                if (acc < 9f) continue;
-                acc = 0f;
-                Vector3 r = Right(pts, i);
-                Vector3 tan = Vector3.Cross(r, Vector3.up).normalized;
-                for (int side = -1; side <= 1; side += 2)
+                System.Func<int, Vector3> W = j => { j = ((j % n) + n) % n; return pts[j] + Right(pts, j) * (side * (wallAt(j, side) - 0.27f)); };
+                int i = 0;
+                while (i < n)
                 {
-                    int b = (idx++ * 7 + side + 3) % Brands.Length;
-                    Vector3 towardTrack = -r * side;
-                    Vector3 pos = pts[i] + r * (side * (wallOffset - 0.27f)) + Vector3.up * 0.55f;
-                    var board = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    Object.DestroyImmediate(board.GetComponent<Collider>());
-                    board.name = "Board_" + Brands[b];
-                    board.transform.SetParent(root, false);
-                    board.transform.position = pos;
-                    board.transform.rotation = Quaternion.LookRotation(-towardTrack, Vector3.up);
-                    board.transform.localScale = new Vector3(7.6f, 0.85f, 0.04f);
-                    board.GetComponent<Renderer>().sharedMaterial = boardMats[b];
-                    board.isStatic = true;
-
-                    var cgo = new GameObject("Text", typeof(RectTransform));
-                    cgo.transform.SetParent(root, false);
-                    cgo.transform.position = pos + towardTrack * 0.025f;
-                    cgo.transform.rotation = Quaternion.LookRotation(-towardTrack, Vector3.up);
-                    var cv = cgo.AddComponent<Canvas>(); cv.renderMode = RenderMode.WorldSpace;
-                    var rt = (RectTransform)cgo.transform; rt.sizeDelta = new Vector2(760f, 85f); rt.localScale = Vector3.one * 0.01f;
-                    var tgo = new GameObject("Label", typeof(RectTransform));
-                    tgo.transform.SetParent(rt, false);
-                    var trt = (RectTransform)tgo.transform; trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = trt.offsetMax = Vector2.zero;
-                    var t = tgo.AddComponent<Text>();
-                    t.font = font; t.fontSize = 62; t.fontStyle = FontStyle.BoldAndItalic; t.alignment = TextAnchor.MiddleCenter;
-                    t.color = BrandFg[b]; t.text = Brands[b];
+                    int best = 0;
+                    for (int h = 1; h <= 20; h++)   // samples each side of the centre (~2 m spacing)
+                    {
+                        Vector3 a0 = W(i - h), a1 = W(i + h);
+                        if (Vector3.Distance(a0, a1) > 7.7f) break;
+                        bool ok = true;
+                        for (int q = -h + 1; q < h && ok; q++)
+                        {
+                            Vector3 w = W(i + q), ab = a1 - a0;
+                            float t = Mathf.Clamp01(Vector3.Dot(w - a0, ab) / ab.sqrMagnitude);
+                            if (Vector3.Distance(a0 + ab * t, w) > 0.14f) ok = false;
+                        }
+                        if (!ok) break;
+                        best = h;
+                    }
+                    Vector3 p0 = W(i - best), p1 = W(i + best);
+                    float len = Vector3.Distance(p0, p1) - 0.3f;
+                    if (best == 0 || len < 3.6f) { i += 1; continue; }
+                    Vector3 along = (p1 - p0).normalized;
+                    Vector3 towardTrack = Vector3.Cross(Vector3.up, along).normalized * -side;
+                    if (Vector3.Dot(towardTrack, -Right(pts, i) * side) < 0f) towardTrack = -towardTrack;
+                    Vector3 pos = (p0 + p1) * 0.5f + Vector3.up * 0.55f;
+                    float hgt = Mathf.Min(0.85f, len / 8.9f * 1.0f + 0.0f);
+                    hgt = Mathf.Max(hgt, 0.6f);
+                    int b = (idx++ * 7 + side + 3) % BrandKit.Count;
+                    fk.Box(0, pos - towardTrack * 0.03f, new Vector3(len + 0.1f, hgt + 0.1f, 0.05f), Quaternion.LookRotation(-towardTrack, Vector3.up));
+                    kit.Quad(pos + towardTrack * 0.002f, Vector3.Cross(towardTrack, Vector3.up).normalized, Vector3.up, len, hgt, b, false);
+                    i += best * 2;
                 }
             }
+            var fr = Obj("BoardFrames", root, fk.Build("BoardFrames"), frame);
+            fr.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.On;
+            kit.Build("BoardLogos", root, BrandKit.BoardMat());
         }
 
         /// <summary>Tiered stand with crowd. Local +x faces the track, tiers rise toward -x, length runs along local z.</summary>
-        static void BuildGrandstand(Transform parent, string name, Vector3 position, Quaternion rotation, float length, int rows, bool withRoof,
+        public static void BuildGrandstand(Transform parent, string name, Vector3 position, Quaternion rotation, float length, int rows, bool withRoof,
             Material concrete, Material roof, Material[] seatMats, Material[] crowdMats, Material skin)
         {
             var root = new GameObject(name).transform;
@@ -578,31 +577,24 @@ namespace OWR.EditorTools
             crowd.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
 
             // big brand fascia on the roof edge, facing the track (+x)
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             int fascias = withRoof ? Mathf.Max(1, Mathf.FloorToInt(length / 45f)) : 0;
-            for (int i = 0; i < fascias; i++)
+            if (fascias > 0)
             {
-                float z = -length / 2f + 22f + i * 45f;
-                int b = (i * 3 + 1) % Brands.Length;
-                var panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                Object.DestroyImmediate(panel.GetComponent<Collider>());
-                panel.transform.SetParent(root, false);
-                panel.transform.localPosition = new Vector3(2.3f, topY + 4.0f, z);
-                panel.transform.localScale = new Vector3(0.1f, 1.6f, Mathf.Min(26f, length * 0.8f));
-                var pm = GetMat($"{Root}/Materials/Board_{Brands[b]}.mat", "Universal Render Pipeline/Lit");
-                panel.GetComponent<Renderer>().sharedMaterial = pm;
-                var cgo = new GameObject("FasciaText", typeof(RectTransform));
-                cgo.transform.SetParent(root, false);
-                cgo.transform.localPosition = new Vector3(2.36f, topY + 4.0f, z);
-                cgo.transform.localRotation = Quaternion.LookRotation(Vector3.left, Vector3.up);
-                var cv = cgo.AddComponent<Canvas>(); cv.renderMode = RenderMode.WorldSpace;
-                var rt = (RectTransform)cgo.transform; rt.sizeDelta = new Vector2(2600f, 160f); rt.localScale = Vector3.one * 0.01f;
-                var tgo = new GameObject("Label", typeof(RectTransform));
-                tgo.transform.SetParent(rt, false);
-                var trt = (RectTransform)tgo.transform; trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = trt.offsetMax = Vector2.zero;
-                var t = tgo.AddComponent<Text>();
-                t.font = font; t.fontSize = 120; t.fontStyle = FontStyle.BoldAndItalic; t.alignment = TextAnchor.MiddleCenter;
-                t.color = BrandFg[b]; t.text = Brands[b];
+                var kit = new BrandKit();
+                for (int i = 0; i < fascias; i++)
+                {
+                    float z = -length / 2f + 22f + i * 45f;
+                    float w = Mathf.Min(26f, length * 0.8f);
+                    var panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    Object.DestroyImmediate(panel.GetComponent<Collider>());
+                    panel.name = "FasciaPanel";
+                    panel.transform.SetParent(root, false);
+                    panel.transform.localPosition = new Vector3(2.3f, topY + 4.0f, z);
+                    panel.transform.localScale = new Vector3(0.1f, w / 8f + 0.3f, w + 0.4f);
+                    panel.GetComponent<Renderer>().sharedMaterial = BrandKit.FrameMat();
+                    kit.Quad(root.TransformPoint(new Vector3(2.36f, topY + 4.0f, z)), root.TransformDirection(Vector3.forward), Vector3.up, w, w / 8f, i * 3 + 1 + name.Length, false);
+                }
+                kit.Build("Fascia", root, BrandKit.BoardMat());
             }
         }
 
@@ -643,7 +635,7 @@ namespace OWR.EditorTools
         }
 
         /// <summary>Broadleaf tree: tapered trunk with a couple of branches and a clumped canopy of lumpy ellipsoids.</summary>
-        static Mesh TreeMesh(int seed)
+        public static Mesh TreeMesh(int seed)
         {
             string path = $"{Root}/Meshes/Tree_{seed}.asset";
             var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
@@ -819,7 +811,7 @@ namespace OWR.EditorTools
         }
 
         // ================================================================= trackside life
-        static float[] Curv(List<Vector3> pts)
+        public static float[] Curv(List<Vector3> pts)
         {
             int n = pts.Count;
             var c = new float[n];
@@ -832,7 +824,7 @@ namespace OWR.EditorTools
         }
 
         /// <summary>Stacked tyre barriers (with a coloured belt) in front of the wall on the outside of corners.</summary>
-        static void BuildTyreWalls(List<Vector3> pts, float wallOffset, Transform parent)
+        public static void BuildTyreWalls(List<Vector3> pts, System.Func<int, int, float> wallAt, Transform parent, float groundY = 0f)
         {
             var rubber = GetMat(Root + "/Materials/TyreWall_Rubber.mat", "Universal Render Pipeline/Lit");
             rubber.SetColor("_BaseColor", new Color(0.05f, 0.05f, 0.055f)); rubber.SetFloat("_Smoothness", 0.55f);
@@ -853,26 +845,38 @@ namespace OWR.EditorTools
             var root = new GameObject("TyreWalls").transform; root.SetParent(parent, false);
             var c = Curv(pts);
             int n = pts.Count;
+            // merged into chunks (one object per ~400 stacks) instead of one object per stack
+            var rubberParts = new List<CombineInstance>(); var beltParts = new List<CombineInstance>();
+            int chunk = 0;
+            System.Action flush = () =>
+            {
+                if (rubberParts.Count == 0) return;
+                var a = new Mesh { indexFormat = IndexFormat.UInt32 }; a.CombineMeshes(rubberParts.ToArray(), true, true);
+                var b = new Mesh { indexFormat = IndexFormat.UInt32 }; b.CombineMeshes(beltParts.ToArray(), true, true);
+                var m = new Mesh { name = "TyreWall_" + chunk, indexFormat = IndexFormat.UInt32 };
+                m.CombineMeshes(new[] { new CombineInstance { mesh = a }, new CombineInstance { mesh = b } }, false, false);
+                var g = Obj("TyreWall_" + chunk++, root, m, null);
+                g.GetComponent<MeshRenderer>().sharedMaterials = new[] { rubber, belt };
+                rubberParts.Clear(); beltParts.Clear();
+            };
             for (int i = 0; i < n; i += 1)
             {
-                if (Mathf.Abs(c[i]) < 1f / 140f || i % 1 != 0) continue;
+                if (Mathf.Abs(c[i]) < 1f / 140f) continue;
                 int outer = c[i] > 0f ? -1 : 1; // turning right -> outside is left
                 Vector3 r = Right(pts, i);
                 for (int row = 0; row < 2; row++)
                 {
-                    var g = new GameObject("Tyres");
-                    g.transform.SetParent(root, false);
-                    g.transform.position = pts[i] + r * outer * (wallOffset - 0.75f - row * 0.62f);
-                    g.transform.rotation = Quaternion.LookRotation(-r * outer, Vector3.up);
-                    g.AddComponent<MeshFilter>().sharedMesh = stack;
-                    g.AddComponent<MeshRenderer>().sharedMaterials = new[] { rubber, belt };
-                    g.isStatic = true;
+                    var mtx = Matrix4x4.TRS(pts[i] + r * outer * (wallAt(i, outer) - 0.75f - row * 0.62f) + Vector3.up * groundY, Quaternion.LookRotation(-r * outer, Vector3.up), Vector3.one);
+                    rubberParts.Add(new CombineInstance { mesh = stack, subMeshIndex = 0, transform = mtx });
+                    beltParts.Add(new CombineInstance { mesh = stack, subMeshIndex = 1, transform = mtx });
                 }
+                if (rubberParts.Count >= 400) flush();
             }
+            flush();
         }
 
         /// <summary>Marshal posts: small hut, two marshals in orange, yellow flag on a pole.</summary>
-        static void BuildMarshalPosts(List<Vector3> pts, float wallOffset, Transform parent, Material[] crowdMats)
+        public static void BuildMarshalPosts(List<Vector3> pts, System.Func<int, int, float> wallAt, Transform parent, Material[] crowdMats, float groundY = 0f)
         {
             var orange = GetMat(Root + "/Materials/Marshal_Orange.mat", "Universal Render Pipeline/Lit");
             orange.SetColor("_BaseColor", new Color(1f, 0.42f, 0.05f)); orange.SetFloat("_Smoothness", 0.5f);
@@ -904,7 +908,7 @@ namespace OWR.EditorTools
                 Vector3 r = Right(pts, i);
                 var g = new GameObject("MarshalPost");
                 g.transform.SetParent(root, false);
-                g.transform.position = pts[i] + r * side * (wallOffset + 3.0f);
+                g.transform.position = pts[i] + r * side * (wallAt(i, side) + 3.0f) + Vector3.up * groundY;
                 g.transform.rotation = Quaternion.LookRotation(Vector3.Cross(-r * side, Vector3.up) * -1f, Vector3.up);
                 // make local +x face the track
                 g.transform.rotation = Quaternion.LookRotation(side > 0 ? -(Vector3.Cross(r, Vector3.up)) : Vector3.Cross(r, Vector3.up), Vector3.up);
@@ -915,7 +919,7 @@ namespace OWR.EditorTools
         }
 
         /// <summary>Tall floodlight / TV camera poles behind the fence.</summary>
-        static void BuildPoles(List<Vector3> pts, float wallOffset, Transform parent)
+        public static void BuildPoles(List<Vector3> pts, System.Func<int, int, float> wallAt, Transform parent, float groundY = 0f)
         {
             var steel = GetMat(Root + "/Materials/Pole_Steel.mat", "Universal Render Pipeline/Lit");
             steel.SetColor("_BaseColor", new Color(0.55f, 0.57f, 0.6f)); steel.SetFloat("_Metallic", 0.8f); steel.SetFloat("_Smoothness", 0.55f);
@@ -935,7 +939,7 @@ namespace OWR.EditorTools
                 Vector3 r = Right(pts, i);
                 var g = new GameObject("Pole");
                 g.transform.SetParent(root, false);
-                g.transform.position = pts[i] + r * side * (wallOffset + 6.5f);
+                g.transform.position = pts[i] + r * side * (wallAt(i, side) + 6.5f) + Vector3.up * groundY;
                 g.transform.rotation = Quaternion.LookRotation(-r * side, Vector3.up);
                 g.AddComponent<MeshFilter>().sharedMesh = mesh;
                 g.AddComponent<MeshRenderer>().sharedMaterial = steel;
@@ -976,7 +980,7 @@ namespace OWR.EditorTools
         }
 
         /// <summary>Animated (jumping) crowd material with the colour of the given lit material.</summary>
-        static Material CrowdMat(Material src)
+        public static Material CrowdMat(Material src)
         {
             var m = GetMat($"{Root}/Materials/CrowdAnim_{src.name}.mat", "OWR/Crowd");
             m.SetColor("_BaseColor", src.GetColor("_BaseColor"));
@@ -997,7 +1001,7 @@ namespace OWR.EditorTools
             return m;
         }
 
-        static GameObject Obj(string name, Transform parent, Mesh mesh, Material mat)
+        public static GameObject Obj(string name, Transform parent, Mesh mesh, Material mat)
         {
             var g = new GameObject(name);
             g.transform.SetParent(parent, false);

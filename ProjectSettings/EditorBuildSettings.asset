@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/_Game/Scenes/Interlagos.unity
+    guid: a2ba64054ebf5574291d2de104f24f29
+  - enabled: 1
     path: Assets/_Game/Scenes/Race.unity
     guid: c4a52d9dfcb9d2d4e8353d4f1d7f4aeb
   m_configObjects:

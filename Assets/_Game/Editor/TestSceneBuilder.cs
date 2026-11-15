@@ -30,10 +30,41 @@ namespace OWR.EditorTools
         const float KerbWidth = 1.3f;
         const float WallOffset = 22f;
 
+        /// <summary>Everything that differs between circuits; the rest of the scene (car, cameras, weather, race) is shared.</summary>
+        public class TrackSpec
+        {
+            public string name, scenePath;
+            public List<Vector3> pts;
+            public float[] wallLeft, wallRight;     // lateral distance of the barrier from the centreline, per point
+            public float roadWidth = 14f;
+            public int startIndex;
+            /// <summary>Optional custom ground (terrain); null = flat grass plane.</summary>
+            public System.Action<TrackSpec, Transform, Material> buildGround;
+            /// <summary>Optional custom trackside; null = the classic stands/trees/boards.</summary>
+            public System.Action<TrackSpec, Transform, TracksideMats> buildTrackside;
+        }
+
+        public class TracksideMats
+        {
+            public Material fence, post, bark, leaves, concrete, roof, skin, grass, gravel, road, wall, wallTop;
+            public Material[] seats, crowd;
+        }
+
+        public static float MaxWall(TrackSpec t) { float m = 0f; foreach (var v in t.wallLeft) m = Mathf.Max(m, v); foreach (var v in t.wallRight) m = Mathf.Max(m, v); return m; }
+
         [MenuItem("OWR/Build Test Scene")]
         public static void Build()
         {
+            var pts = SampleClosedCatmullRom(Layout, 2f);
+            var wl = new float[pts.Count]; var wr = new float[pts.Count];
+            for (int i = 0; i < pts.Count; i++) wl[i] = wr[i] = WallOffset;
+            BuildScene(new TrackSpec { name = "Classic", scenePath = ScenePath, pts = pts, wallLeft = wl, wallRight = wr, roadWidth = RoadWidth, startIndex = RaceBuilder.StartIndex });
+        }
+
+        public static void BuildScene(TrackSpec spec)
+        {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            float RoadWidth = spec.roadWidth;
             EnsureFolder(Root + "/Scenes");
             EnsureFolder(Root + "/Materials");
             EnsureFolder(Root + "/Settings");
@@ -77,14 +108,17 @@ namespace OWR.EditorTools
             };
 
             // ---------------- ground & track ----------------
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "Ground";
-            ground.transform.localScale = new Vector3(300f, 1f, 300f);
-            ground.GetComponent<Renderer>().sharedMaterial = mGrass;
-            ground.isStatic = true;
-
             var trackRoot = new GameObject("Track").transform;
-            List<Vector3> pts = SampleClosedCatmullRom(Layout, 2f);
+            List<Vector3> pts = spec.pts;
+            if (spec.buildGround != null) spec.buildGround(spec, trackRoot, mGrass);
+            else
+            {
+                var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                ground.name = "Ground";
+                ground.transform.localScale = new Vector3(300f, 1f, 300f);
+                ground.GetComponent<Renderer>().sharedMaterial = mGrass;
+                ground.isStatic = true;
+            }
             int n = pts.Count;
             var road = MeshObject("Road", trackRoot, BuildRibbon(pts, 0, n, true, -RoadWidth / 2f, RoadWidth / 2f, 0.02f, 0.02f), mRoad, true);
             SaveMesh(road.GetComponent<MeshFilter>().sharedMesh, "Road");
@@ -112,7 +146,10 @@ namespace OWR.EditorTools
                 Vector3 ta = (pts[Mathf.Min(a + 3, n - 1)] - pts[a]).normalized, tb = (pts[b] - pts[Mathf.Max(b - 3, 0)]).normalized;
                 float turn = Vector3.Cross(ta, tb).y; // >0 = turning right
                 int outerSide = turn > 0f ? -1 : 1;
-                float g0 = RoadWidth / 2f + KerbWidth + 2.5f, g1 = WallOffset - 1.2f;
+                float wallMin = float.MaxValue;
+                var wallArr = outerSide < 0 ? spec.wallLeft : spec.wallRight;
+                for (int q = Mathf.Max(a - 10, 0); q <= Mathf.Min(b + 25, n - 1); q++) wallMin = Mathf.Min(wallMin, wallArr[q]);
+                float g0 = RoadWidth / 2f + KerbWidth + 2.5f, g1 = wallMin - 1.2f;
                 var gmesh = outerSide < 0 ? BuildRibbon(pts, Mathf.Max(a - 10, 0), Mathf.Min(b + 25, n - 1), false, -g1, -g0, 0.012f, 0.012f)
                                       : BuildRibbon(pts, Mathf.Max(a - 10, 0), Mathf.Min(b + 25, n - 1), false, g0, g1, 0.012f, 0.012f);
                 var gobj = MeshObject($"GravelTrap_{kerbCount}", trackRoot, gmesh, mGravel, true);
@@ -123,9 +160,9 @@ namespace OWR.EditorTools
             // concrete barrier walls with a painted top stripe
             for (int side = -1; side <= 1; side += 2)
             {
-                float off = side * WallOffset;
-                MeshObject(side < 0 ? "Wall_L" : "Wall_R", trackRoot, BuildWall(pts, off, 0f, 1.0f, 0.5f), mWall, true);
-                MeshObject(side < 0 ? "WallStripe_L" : "WallStripe_R", trackRoot, BuildWall(pts, off - side * 0.01f, 0.75f, 1.0f, 0.502f), mWallTop, false);
+                var offs = side < 0 ? spec.wallLeft : spec.wallRight;
+                MeshObject(side < 0 ? "Wall_L" : "Wall_R", trackRoot, BuildWall(pts, offs, side, 0f, -0.6f, 1.0f, 0.5f), mWall, true);
+                MeshObject(side < 0 ? "WallStripe_L" : "WallStripe_R", trackRoot, BuildWall(pts, offs, side, -0.01f, 0.75f, 1.0f, 0.502f), mWallTop, false);
             }
 
             // ---------------- trackside: catch fence, sponsor boards, grandstand + crowd, trees ----------------
@@ -145,7 +182,11 @@ namespace OWR.EditorTools
                 Lit("Crowd_Green", new Color(0.08f, 0.16f, 0.1f), 0.2f, 0f), Lit("Crowd_PonchoClear", new Color(0.7f, 0.73f, 0.77f), 0.75f, 0f),
             };
             var mSkin = Lit("Crowd_Skin", new Color(0.62f, 0.45f, 0.35f), 0.3f, 0f);
-            EnvironmentBuilder.BuildTrackside(pts, WallOffset, trackRoot, mFence, mPost, mBark, mLeaves, mConcrete, mRoof, seats, crowd, mSkin);
+            if (spec.buildTrackside != null)
+                spec.buildTrackside(spec, trackRoot, new TracksideMats { fence = mFence, post = mPost, bark = mBark, leaves = mLeaves, concrete = mConcrete, roof = mRoof,
+                    skin = mSkin, seats = seats, crowd = crowd, grass = mGrass, gravel = mGravel, road = mRoad, wall = mWall, wallTop = mWallTop });
+            else
+                EnvironmentBuilder.BuildTrackside(pts, WallOffset, trackRoot, mFence, mPost, mBark, mLeaves, mConcrete, mRoof, seats, crowd, mSkin);
 
             // ---------------- spawn ----------------
             Vector3 spawnTan = (pts[12] - pts[10]).normalized;
@@ -229,16 +270,16 @@ namespace OWR.EditorTools
                     AddNoise(stand, "Audio_Crowd", OWR.AudioFX.AmbientNoise.Mode.Crowd, ctrl, 0.9f, 1f);
 
             // ---------------- race: path, start/finish, lights, AI field, managers, HUD; distant mountains ----------------
-            RaceBuilder.Setup(car, ctrl, pts, trackRoot, RoadWidth, spawn);
+            RaceBuilder.Setup(car, ctrl, pts, trackRoot, RoadWidth, spawn, spec.startIndex);
             Vector3 centre = Vector3.zero; foreach (var q in pts) centre += q; centre /= pts.Count;
             RaceBuilder.BuildMountains(new Vector3(centre.x, 0f, centre.z), trackRoot);
 
             PlayerSettings.runInBackground = true; // keeps play mode ticking while the editor is unfocused
-            EditorSceneManager.SaveScene(scene, ScenePath);
-            AddToBuildSettings(ScenePath);
+            EditorSceneManager.SaveScene(scene, spec.scenePath);
+            AddToBuildSettings(spec.scenePath);
             AssetDatabase.SaveAssets();
             Selection.activeGameObject = car;
-            Debug.Log($"[OWR] Scene built: {ScenePath}  track {TrackLength(pts):0} m, {kerbCount} kerb sections");
+            Debug.Log($"[OWR] Scene built: {spec.scenePath}  track {TrackLength(pts):0} m, {kerbCount} kerb sections");
         }
 
         // ------------------------------------------------------------------ car root (physics)
@@ -407,14 +448,14 @@ namespace OWR.EditorTools
             return (t2 - tt) / (t2 - t1) * b1 + (tt - t1) / (t2 - t1) * b2;
         }
 
-        static Vector3 Right(List<Vector3> pts, int i)
+        public static Vector3 Right(List<Vector3> pts, int i)
         {
             int n = pts.Count;
             Vector3 tan = (pts[(i + 1) % n] - pts[(i - 1 + n) % n]).normalized;
             return Vector3.Cross(Vector3.up, tan).normalized;
         }
 
-        static float[] Curvature(List<Vector3> pts)
+        public static float[] Curvature(List<Vector3> pts)
         {
             int n = pts.Count;
             var c = new float[n];
@@ -428,7 +469,7 @@ namespace OWR.EditorTools
         }
 
         /// <summary>Ribbon from index a to b (closed loops wrap) between lateral offsets, with inner/outer heights.</summary>
-        static Mesh BuildRibbon(List<Vector3> pts, int a, int b, bool closed, float off0, float off1, float y0, float y1)
+        public static Mesh BuildRibbon(List<Vector3> pts, int a, int b, bool closed, float off0, float off1, float y0, float y1)
         {
             int n = pts.Count;
             int count = closed ? n + 1 : b - a + 1;
@@ -459,17 +500,18 @@ namespace OWR.EditorTools
         }
 
         /// <summary>Closed vertical wall loop with thickness, at lateral offset off, from y0 to y1.</summary>
-        static Mesh BuildWall(List<Vector3> pts, float off, float y0, float y1, float thick)
+        public static Mesh BuildWall(List<Vector3> pts, float[] offs, int side, float extra, float y0, float y1, float thick)
         {
             int n = pts.Count;
             var verts = new List<Vector3>();
             var uvs = new List<Vector2>();
             var tris = new List<int>();
             float dist = 0f;
-            float[] laterals = { off - thick / 2f, off + thick / 2f };
             for (int k = 0; k <= n; k++)
             {
                 int i = k % n;
+                float off = side * (offs[i] + extra);
+                float[] laterals = { off - thick / 2f, off + thick / 2f };
                 if (k > 0) dist += Vector3.Distance(pts[i], pts[(k - 1) % n]);
                 Vector3 r = Right(pts, i);
                 foreach (float lat in laterals)
@@ -492,7 +534,7 @@ namespace OWR.EditorTools
             return m;
         }
 
-        static GameObject MeshObject(string name, Transform parent, Mesh mesh, Material mat, bool collider)
+        public static GameObject MeshObject(string name, Transform parent, Mesh mesh, Material mat, bool collider)
         {
             var g = new GameObject(name);
             g.transform.SetParent(parent, false);
@@ -535,7 +577,7 @@ namespace OWR.EditorTools
             }
         }
 
-        static Material Lit(string name, Color c, float smooth, float metal, Texture2D albedo = null, Texture2D normal = null, Vector2 tiling = default)
+        public static Material Lit(string name, Color c, float smooth, float metal, Texture2D albedo = null, Texture2D normal = null, Vector2 tiling = default)
         {
             var m = GetOrCreate(name, "Universal Render Pipeline/Lit");
             m.SetColor("_BaseColor", c);

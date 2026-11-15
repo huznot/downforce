@@ -35,7 +35,7 @@ namespace OWR.EditorTools
             if (Directory.Exists(Out)) Directory.Delete(Out, true);
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
-                scenes = new[] { RacePath },
+                scenes = BuildScenes(),
                 locationPathName = Out,
                 target = BuildTarget.WebGL,
                 options = BuildOptions.None,
@@ -92,6 +92,13 @@ then restart the browser. Add ?fps to the address to see the frame rate.
 
 Privacy policy for the Google Play listing: privacy.html (in this folder) -> https://<your-site>/privacy.html
 ");
+        }
+    
+        /// <summary>Interlagos first (the default circuit), then the classic track.</summary>
+        public static string[] BuildScenes()
+        {
+            const string interlagos = "Assets/_Game/Scenes/Interlagos.unity";
+            return System.IO.File.Exists(interlagos) ? new[] { interlagos, "Assets/_Game/Scenes/Race.unity" } : new[] { "Assets/_Game/Scenes/Race.unity" };
         }
     }
 }
